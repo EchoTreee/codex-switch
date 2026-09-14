@@ -4,7 +4,9 @@
 
 This tool copies local authentication files. Profiles and `previous.*` backups contain unencrypted credentials and may also contain private provider configuration. Keep both the Codex home and profile store accessible only to your own OS account. Do not put them in a public, shared, or automatically synchronized directory.
 
-The current script does not encrypt credentials, explicitly harden file permissions, validate profile names, or lock simultaneous writes. Use simple trusted profile names, keep directories private, and stop processes using the same home before switching. It is intended for your own local account; it is not a security boundary between users or processes.
+The current script does not encrypt credentials, explicitly harden file permissions, validate profile names, or lock simultaneous writes. Use simple trusted profile names, keep directories private, and stop processes using the same home before routine switching or recovery. It is intended for your own local account; it is not a security boundary between users or processes.
+
+The [shared-home parallel workflow](docs/parallel.md) documents author-reported usage with known races, not an isolation guarantee. Another process can replace live credentials; the active-profile marker does not prove which account those files belong to. Avoid saving or recovering profiles while competing writers remain. Resume starts a new authenticated Codex process even though its session-index lookup is read-only.
 
 Deleting a saved profile or uninstalling the command does not revoke credentials. Switching can retain additional credential copies in backups. Environment-based keys and keychain entries are outside the file snapshot mechanism.
 

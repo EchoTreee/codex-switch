@@ -4,7 +4,7 @@
 
 # codex-switch
 
-**为 OpenAI Codex CLI 保存并切换多账号、多 provider 配置。**
+**一台机器，多账号协作；共享本地对话，配合 worktree 并行开发。**
 
 [![MIT license](https://img.shields.io/badge/license-MIT-60d5b0)](LICENSE)
 [![Bash + Python](https://img.shields.io/badge/built_with-Bash_%2B_Python-9bb8ff)](#运行要求)
@@ -12,7 +12,7 @@
 
 [English](README.md) · **简体中文**
 
-[官方多账号](#官方多账号使用) · [官方与中转站混用](#官方与中转站混合使用) · [安装](#安装) · [命令速查](#命令速查) · [进阶指南（英文）](docs/usage.md) · [参与贡献](CONTRIBUTING.md)
+[并行工作流](#并行工作流集中启动各自完成结束后恢复) · [官方多账号](#官方多账号使用) · [官方与中转站混用](#官方与中转站混合使用) · [安装](#安装) · [命令速查](#命令速查) · [参与贡献](CONTRIBUTING.md)
 
 个人账号、工作账号、自定义 provider，每次切换都要手动整理登录文件和配置？给每套环境起个名字，把本地登录文件和 `config.toml` 一起保存，需要时一起恢复。
 
@@ -23,6 +23,15 @@ codex-switch save work       # 保存当前登录态和配置
 codex-switch use personal    # 切换到已经保存的个人配置
 codex-switch resume "parser" # 按标题关键词继续本地会话
 ```
+
+## 六个核心优势
+
+1. **一台机器，多账号并行。** 多个终端分别启动 Codex CLI，选择不同 ChatGPT 账号处理任务。作者已在实践中使用这一方式；共享 home 仍有认证竞态，请按[并行工作流](#并行工作流集中启动各自完成结束后恢复)操作。
+2. **账号间共享本地对话。** 同一 `CODEX_HOME` 下，跨账号、跨兼容 provider（官方 ↔ 中转站）继续同一条对话，无需复制或同步两套历史。
+3. **文件切换，不主动退出登录。** 恢复 `auth.json` + `config.toml`，减少重复登录操作。切换器不调用 `codex logout`，也不调用 token 吊销接口；但这不阻止凭据到期或被其他进程轮换。
+4. **官方账号与自定义 provider 统一管理。** 已配置可用的 API-key 中转站及其 `base_url` 可一起存成 profile。环境变量形式的 key 需另行管理。
+5. **配合 Git worktree 并行开发。** 每个 agent 使用独立分支和工作目录，避免直接覆盖彼此的代码文件；认证文件和外部服务仍需单独考虑。
+6. **单文件脚本，轻量即用。** 只需 Bash、Python 3 标准库及常见 Unix 工具，无额外 Python 包、构建步骤或常驻服务，安装到 `~/.local/bin` 即可使用。
 
 ## 先选你的使用场景
 
@@ -36,7 +45,21 @@ codex-switch resume "parser" # 按标题关键词继续本地会话
 
 一个 Bash 脚本，搭配 Python 标准库。不需要构建，也不需要常驻服务或注册本项目的账号。
 
-> **使用边界：**切换会影响指定的 `CODEX_HOME`，并不隔离正在运行的 Codex 进程。切换前先关闭使用同一目录的会话。需要同时运行不同账号时，使用独立的 Codex home 和 profile 存储目录，详见[并行使用](docs/usage.md#parallel-use)。
+> **使用边界：**常规切换和凭据恢复应在其他共享 home 的进程退出后进行。下面的共享目录并行方式来自作者实践，仍有已知竞态；需要分开认证文件时，使用[独立 home 和 profile 存储目录](docs/usage.md#parallel-use)。
+
+## 并行工作流：集中启动，各自完成，结束后恢复
+
+**作者验证过的使用经验是：集中启动计划中的账号，各自完成任务，结束后再处理凭据恢复；共享 home 下频繁、无缝地来回切换仍不可靠。**
+
+1. **提前准备。** 在没有其他进程写入共享 home 时保存有效 profile，并为各 agent 准备独立分支与 worktree。
+2. **依次开好终端。** 在各自 worktree 中，先 `codex-switch use <账号>`，紧接着启动 `codex`，完成当前终端的启动后再开下一个。这能减少启动时用错账号的机会，但不能消除刷新竞态。
+3. **运行中各自完成任务。** 避免手动 `use`、`save`、`relogin` 或修改共享认证文件。即使你不操作，Codex 自身仍可能刷新并写回凭据。
+4. **查记录与续会话分开。** `codex-switch sessions` 只读索引，可以用来查找历史；`codex-switch resume` 会启动新 Codex 进程，仍然需要正确的登录身份，不能当成与 token 无关的操作。
+5. **所有共享 home 的进程退出后再恢复。** 不要假设 profile 中一定是最新有效 token。凭据陈旧或身份不确定时，用 `codex-switch relogin <账号>` 重新登录，再启动或续聊；不能只按运行时长判断是否失效。
+
+仍需注意三个风险：新进程可能读到另一个账号；token 轮换和并发写入可能让快照陈旧或串号；`use` 又可能按过时的 `current` 标记，把错误快照回存到 profile。
+
+完整的双终端 worktree 示例、三个风险的原因与收尾步骤，见[并行工作流与风险指南](docs/parallel.zh-CN.md)。本地历史还在与登录态可用，是两件不同的事；也应避免多个进程同时恢复并写入同一条对话。
 
 ## 官方多账号使用
 
@@ -76,7 +99,7 @@ codex resume                  # 选择同一条会话继续
 
 如果这条会话之前已经通过中转站恢复过，保存的 provider 可能已不同，应使用下面的[混合使用方式](#官方与中转站混合使用)。不同官方账号的模型权限也可能不同，需要时选择可用模型；原生选择器的工作目录过滤仍可能影响可见性。
 
-上面的示例是顺序切换。需要同时运行多个隔离进程时，使用[独立 home 与 profile 存储目录](docs/usage.md#parallel-use)，但它们不会自动共享会话历史。
+上面的示例是顺序切换。共享 home 的多终端实践见[并行工作流](#并行工作流集中启动各自完成结束后恢复)；要分开认证文件，则使用[独立 home 与 profile 存储目录](docs/usage.md#parallel-use)，但它们不会自动共享会话历史。
 
 ## 官方与中转站混合使用
 
@@ -252,7 +275,7 @@ codex-switch relogin --device-auth work
 
 **中转站/API provider？** 先按服务方要求配置 Codex 并验证可用，再保存 profile。环境变量形式的 key 需要你自行设置，工具不会替你切换。
 
-**能同时运行不同账号吗？** 本工具提供文件切换，不提供进程隔离。同一目录可能被多个进程写回，请使用不同的 `CODEX_HOME` 和 `CODEX_SWITCH_DIR`；独立 worktree 只隔离代码目录。
+**能同时运行不同账号吗？** 作者采用的是集中启动各账号、各自完成任务的[共享 home 并行方式](docs/parallel.zh-CN.md)，需要接受认证刷新和回存竞态。要分开认证文件，则使用不同的 `CODEX_HOME` 和 `CODEX_SWITCH_DIR`，但历史不会自动共享；独立 worktree 只隔离代码目录。
 
 更多细节见[使用指南（英文）](docs/usage.md)。
 

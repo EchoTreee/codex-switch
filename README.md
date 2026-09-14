@@ -4,7 +4,7 @@
 
 # codex-switch
 
-**Save and switch account and provider profiles for OpenAI Codex CLI.**
+**Multiple Codex accounts. Shared local conversations. Parallel worktrees.**
 
 [![MIT license](https://img.shields.io/badge/license-MIT-60d5b0)](LICENSE)
 [![Bash + Python](https://img.shields.io/badge/built_with-Bash_%2B_Python-9bb8ff)](#requirements)
@@ -12,7 +12,7 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-[Official accounts](#multiple-official-accounts) · [Official + relay](#official-accounts-and-relays) · [Install](#install) · [Commands](#commands) · [Usage guide](docs/usage.md) · [Contribute](CONTRIBUTING.md)
+[Parallel workflow](#parallel-work-launch-finish-recover) · [Official accounts](#multiple-official-accounts) · [Official + relay](#official-accounts-and-relays) · [Install](#install) · [Commands](#commands) · [Contribute](CONTRIBUTING.md)
 
 Moving between a personal account, a work account, and a custom provider? Give each setup a name. `codex-switch` saves the local authentication and configuration files together, then restores the pair you choose.
 
@@ -23,6 +23,15 @@ codex-switch save work       # save your current login + configuration
 codex-switch use personal    # restore a previously saved profile
 codex-switch resume "parser" # resume a matching local session
 ```
+
+## Six reasons to use codex-switch
+
+1. **Multiple accounts on one machine.** Launch a Codex CLI in each terminal with a selected ChatGPT account. The author has used this for concurrent tasks; a shared home still has authentication races. Follow the [parallel workflow](#parallel-work-launch-finish-recover).
+2. **One local conversation history.** With the same `CODEX_HOME`, accounts and compatible providers can continue the same conversation, including official ↔ relay transitions. No duplicate history store or synchronization step is needed.
+3. **Switch files, without logging out.** Restore `auth.json` + `config.toml` instead of manually repeating login. The switcher never calls `codex logout` or a token-revocation endpoint. This does not prevent credentials from expiring or being rotated elsewhere.
+4. **Official accounts and custom providers together.** Save working API-key provider configurations, including relay `base_url` settings, alongside official profiles. Keys supplied through environment variables must be managed separately.
+5. **Separate worktrees for parallel code changes.** Give each agent its own branch and Git worktree so edits stay in separate working directories. Worktrees isolate code files, not authentication or external services.
+6. **One script, minimal setup.** Bash + Python 3's standard library and standard Unix tools; no extra Python packages, build step, or background service. Install to `~/.local/bin` and use it.
 
 ## Choose your workflow
 
@@ -36,7 +45,21 @@ codex-switch resume "parser" # resume a matching local session
 
 One Bash script with Python's standard library. No build step, background service, or separate account with this project.
 
-> **Scope:** switching affects the selected `CODEX_HOME`. It does not isolate running Codex processes. Stop sessions using that directory before switching; see [parallel use](docs/usage.md#parallel-use) for separate homes.
+> **Scope:** ordinary account changes and recovery should happen after stopping other processes using that home. The shared-home parallel pattern below is author-reported experience, with known races; use [separate homes and stores](docs/usage.md#parallel-use) when you need separate authentication files.
+
+## Parallel work: launch, finish, recover
+
+**The author's working pattern is to launch the planned accounts, let each complete its task, then recover credentials after shutdown. Frequent seamless switching during shared-home parallel runs remains unreliable.**
+
+1. **Prepare first.** Save valid profiles while no other process is writing the shared home. Create one Git worktree and branch per agent.
+2. **Launch the planned terminals in sequence.** In each worktree, run `codex-switch use <profile>` immediately before `codex`. Complete startup before moving to the next terminal. This reduces unintended startup identities but does not eliminate refresh races.
+3. **Let running tasks finish.** Avoid manual `use`, `save`, `relogin`, or edits to shared authentication files during the run. Codex itself may still refresh and write credentials.
+4. **Look up history without launching another session.** `codex-switch sessions` only reads the index. `codex-switch resume` starts a new Codex process and still needs the intended account; it is not an authentication-free operation.
+5. **Recover after all shared-home processes exit.** Do not assume saved profiles contain the latest usable tokens. If stale or uncertain, run `codex-switch relogin <profile>`, then launch or resume. Elapsed time alone does not determine validity.
+
+Three risks remain: a newly started process can pick up the wrong account; token rotation and another writer can leave a stale or wrong snapshot; `use` can copy that snapshot into the profile named by a stale `current` marker.
+
+See the [full parallel guide](docs/parallel.md) for two-terminal worktree commands, the three failure modes, and recovery. A retained local history and reliable authentication are separate requirements. Avoid resuming the same conversation simultaneously from multiple writers.
 
 ## Multiple official accounts
 
@@ -76,7 +99,7 @@ The login identity changes, but both accounts normally use `model_provider = "op
 
 If the session was previously resumed through a relay, its saved provider may now be different: use the [mixed-provider workflow](#official-accounts-and-relays). Model access can also differ between official accounts; select an available model when needed. Native picker working-directory filters still apply.
 
-These examples switch accounts sequentially. For simultaneous isolated processes, use [separate homes and profile stores](docs/usage.md#parallel-use), which do not automatically share session history.
+These examples switch accounts sequentially. For the author's shared-home concurrent workflow, see [parallel work](#parallel-work-launch-finish-recover). For separate authentication files, use [separate homes and profile stores](docs/usage.md#parallel-use), which do not automatically share session history.
 
 ## Official accounts and relays
 

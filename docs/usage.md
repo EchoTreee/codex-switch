@@ -53,6 +53,8 @@ codex-switch resume "parser regression"
 
 With a single match, the script runs `codex resume <id>` with `-c` overrides from the active configuration. A provider override is always supplied; a model override is supplied if the script finds a model. The database lookup itself is read-only. Once launched, Codex may update session state.
 
+`sessions` is only a lookup; `resume` launches a new Codex process that still needs valid authentication for the selected provider. During a shared-home parallel run, a matching conversation ID does not guarantee that process will use the intended account. See [parallel operation and recovery](parallel.md).
+
 Resuming with a different provider requires that provider to support the selected model and conversation. It is not a universal migration guarantee. Session files stay in the selected Codex home; this project does not synchronize separate homes or machines.
 
 ## Shared history and provider writeback
@@ -78,7 +80,9 @@ To verify provider writeback on your Codex version, use a disposable conversatio
 
 ## Parallel use
 
-Changing one shared home is not isolation. Running Codex processes may read or write the same files. Stop them before using `use` or `relogin` against that home.
+There are two distinct options. The author reports using a shared home by launching each selected account in sequence, letting the tasks finish, and recovering credentials afterward; this retains shared local history but has authentication races. See the [parallel guide](parallel.md) / [中文指南](parallel.zh-CN.md) for the workflow and risks. Routine switching, re-login, and recovery should happen after stopping other processes using that home.
+
+The alternative below uses separate homes and stores to separate authentication files. It does not automatically share conversation history. Neither option makes worktrees an authentication boundary.
 
 For separate concurrent setups, launch each terminal with its own home **and its own profile store**. For example, in terminal A:
 
