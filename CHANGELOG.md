@@ -4,6 +4,7 @@
 
 ### Added
 
+- Separate official-account and official + relay workflow guides in both READMEs, with a comparison of authentication versus provider changes, shared history, bidirectional resume examples, and version-dependent provider writeback notes.
 - Full Chinese README, shared visual header, and a focused usage guide.
 - Contribution and security guidance, roadmap, and issue/PR templates.
 - Isolated smoke tests and a Linux/macOS GitHub Actions workflow.

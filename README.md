@@ -12,9 +12,11 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-[Install](#install) · [Quick start](#quick-start) · [Commands](#commands) · [Usage guide](docs/usage.md) · [Contribute](CONTRIBUTING.md)
+[Official accounts](#multiple-official-accounts) · [Official + relay](#official-accounts-and-relays) · [Install](#install) · [Commands](#commands) · [Usage guide](docs/usage.md) · [Contribute](CONTRIBUTING.md)
 
 Moving between a personal account, a work account, and a custom provider? Give each setup a name. `codex-switch` saves the local authentication and configuration files together, then restores the pair you choose.
+
+**Keep working on the same local conversation across accounts or providers.** With the same `CODEX_HOME`, the history is already shared; there is no second copy to synchronize. Choose the [official-account workflow](#multiple-official-accounts) or the [official + relay workflow](#official-accounts-and-relays).
 
 ```bash
 codex-switch save work       # save your current login + configuration
@@ -22,18 +24,120 @@ codex-switch use personal    # restore a previously saved profile
 codex-switch resume "parser" # resume a matching local session
 ```
 
-## Why codex-switch?
+## Choose your workflow
 
-| Your workflow | What it helps with |
-| --- | --- |
-| Several accounts | Switch named profiles without manually copying login files. |
-| Several providers | Restore authentication and `config.toml` together. |
-| An unfinished task | Search local session titles and resume with the active provider/model. |
-| A switch you want to undo | Keep a `previous.*` snapshot of the files that were replaced. |
+| Question | Multiple official accounts | Official account + relay |
+| --- | --- | --- |
+| What changes? | Login identity; configuration can also differ. | Authentication, provider endpoint, and possibly model. |
+| Provider ID | Normally `openai` for both accounts. | For example, `openai` ↔ `zipwuu`. |
+| What happens to local history? | Shared when both use the same `CODEX_HOME`. | Shared under that same condition. |
+| How do I resume? | Switch profile, then use native `codex resume` for an `openai` session; the wrapper also works. | Find with `codex-switch sessions`, then use `codex-switch resume` to pass the active provider/model. |
+| Why the different steps? | Changing the account alone does not cross a provider boundary. | Finding the session and choosing its execution provider are separate concerns. |
 
 One Bash script with Python's standard library. No build step, background service, or separate account with this project.
 
 > **Scope:** switching affects the selected `CODEX_HOME`. It does not isolate running Codex processes. Stop sessions using that directory before switching; see [parallel use](docs/usage.md#parallel-use) for separate homes.
+
+## Multiple official accounts
+
+**Use this for two or more official accounts that normally share the `openai` provider.** The main task is switching authentication while keeping your local work available.
+
+### Save each account once
+
+After [installation](#install), start with a working official Codex setup containing both `auth.json` and `config.toml`. Close sessions using that home before changing accounts.
+
+```bash
+# Account A is already logged in and configured.
+codex-switch save official-work
+
+# Sign in to account B and immediately save its files.
+codex login
+codex-switch save official-personal
+```
+
+Choose the intended account during login. Saving immediately prevents a later switch from copying the new account's files back into the previously active profile.
+
+### Switch accounts and continue
+
+```bash
+codex-switch use official-work
+codex resume                  # select an existing official-provider session
+
+# Exit the running session before switching accounts.
+codex-switch use official-personal
+codex resume                  # select that same session
+```
+
+For an exact conversation, use `codex resume "your-session-id"` after replacing the ID. Or use `codex-switch sessions` and `codex-switch resume "parser"` to search by title and explicitly apply the active model settings.
+
+### Why native resume is usually enough
+
+The login identity changes, but both accounts normally use `model_provider = "openai"`. An existing `openai` session therefore does not need a different provider just because you changed accounts. The local history remains under the same home; switching accounts does not create a second history store.
+
+If the session was previously resumed through a relay, its saved provider may now be different: use the [mixed-provider workflow](#official-accounts-and-relays). Model access can also differ between official accounts; select an available model when needed. Native picker working-directory filters still apply.
+
+These examples switch accounts sequentially. For simultaneous isolated processes, use [separate homes and profile stores](docs/usage.md#parallel-use), which do not automatically share session history.
+
+## Official accounts and relays
+
+**Use this when the provider changes as well as the account.** Keep the same local history, find it without a provider filter, then explicitly choose the provider/model used to continue.
+
+### Save both working configurations
+
+```bash
+# Start from a verified official login and configuration.
+codex-switch save official
+
+# Configure and verify the relay in Codex, then save it immediately.
+codex-switch save relay
+```
+
+Before the second `save`, actually configure the relay's provider ID, endpoint, model, and authentication in Codex and verify that it works. The name `relay` does not configure a provider automatically. File snapshots do not switch environment-based API keys; set those separately for the selected provider. See [custom providers](docs/usage.md#custom-providers).
+
+### The history is already shared
+
+When both setups use the same `CODEX_HOME` (default `~/.codex`), they use the same local storage:
+
+- `~/.codex/sessions/` — rollout JSONL conversation records.
+- `~/.codex/state_5.sqlite` — the session index used by this script.
+
+The files are not split into separate official-account and relay histories. A session can have provider metadata while its history remains in that same directory. Switching profiles leaves these records in place.
+
+### Why a conversation can seem to disappear
+
+In the author's reported workflow, Codex's `/resume` picker filters by `model_provider`: the `openai` view shows official-provider sessions, while the `zipwuu` view shows that relay's sessions. Without an override, resuming also uses the session's saved provider. A missing picker entry can therefore be a filtered view, rather than lost history. Picker behavior is version-dependent; working-directory filters can also hide sessions.
+
+### Continue in either direction
+
+First save and verify both profiles in the same home. Here, `relay` and `official` are saved profile names; choose a title keyword matching exactly one CLI session.
+
+```bash
+codex-switch sessions           # list CLI / exec sessions across providers
+codex-switch use relay          # activate the saved relay configuration
+codex-switch resume "parser"    # continue with its provider/model
+
+# Exit that Codex session before switching back.
+codex-switch use official
+codex-switch resume "parser"    # continue the same local conversation
+```
+
+The underlying commands look like this; replace the session ID and use models available on each provider. `zipwuu` is an example configured provider ID, not a built-in profile or an endorsement.
+
+```bash
+SESSION_ID="your-session-id"
+
+# Via the relay
+codex resume "$SESSION_ID" -c 'model_provider="zipwuu"' -c 'model="gpt-5.6-terra"'
+
+# After exiting, via the official provider
+codex resume "$SESSION_ID" -c 'model_provider="openai"' -c 'model="gpt-6-astra"'
+```
+
+The author reports that successful cross-provider resume writes the selected provider back to the local index, effectively “re-pointing” that session. A later override can point it back while continuing its existing local history. **Codex performs that writeback; `codex-switch` only reads the index and forwards the overrides.** This persistence behavior is not independently verified across Codex versions. See [the detailed mechanism](docs/usage.md#shared-history-and-provider-writeback).
+
+This workflow requires a shared home, a compatible session format, and a provider/model that can resume the conversation. Existing history is retained locally; that does not guarantee every historical token fits the model's context window. Separate homes or machines do not automatically share history.
+
+**Remember: find with `codex-switch sessions`; continue with `codex-switch resume`.**
 
 ## Requirements
 
