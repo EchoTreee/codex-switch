@@ -4,6 +4,7 @@
 
 ### Added
 
+- Optional herdr companion recommendations in both READMEs and parallel guides, including pane setup and the distinction between detaching and restarting an agent.
 - Six core benefits at the top of both READMEs, plus bilingual parallel-workflow guides covering worktrees, startup identities, token snapshots, and safe timing for recovery.
 - Separate official-account and official + relay workflow guides in both READMEs, with a comparison of authentication versus provider changes, shared history, bidirectional resume examples, and version-dependent provider writeback notes.
 - Full Chinese README, shared visual header, and a focused usage guide.

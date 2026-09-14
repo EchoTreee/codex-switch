@@ -98,6 +98,25 @@ codex-switch resume "parser"
 
 登录时选对账号；`relogin` 会恢复该 profile 已保存的配置。如果当前配置本身已经被误存，还需检查并修正它。对中转站/API-key provider，应按其支持的认证方式恢复，不能把官方 OAuth 重新登录当成通用修复。
 
+## 用 herdr 集中管理终端
+
+[herdr](https://github.com/herdrdev/herdr) 是可选的 TUI 搭配：herdr 管窗格，codex-switch 管账号与线路，Git worktree 分开代码目录。这是文档推荐的组合工作流，尚未作为内置集成或完整兼容性测试发布。
+
+1. 按 [herdr 官方快速入门](https://herdr.dev/docs/quick-start/)安装，在要开发的代码项目中运行 `herdr`。
+2. 用 herdr 的分屏功能为每个 worktree 创建一个窗格。在窗格内进入对应目录，执行上面的账号启动命令；完成一个账号启动后再启动下一个。
+3. 各 agent 继续自己的任务，在同一界面观察哪些窗格需要处理。窗格状态不负责验证对应 Codex 进程的 ChatGPT 账号。
+
+**断开界面和重启服务是两回事。** herdr 后台服务仍在运行时，按 `Ctrl+B`，再按 `Q` 可断开客户端，之后运行 `herdr` 重新连接。服务或机器重启会结束原来的进程；恢复 agent 会启动新进程，仍需遵守共享 home 下的身份选择规则。
+
+[herdr 的会话恢复文档](https://herdr.dev/docs/session-state/)说明，服务恢复时默认会尝试原生 agent 续聊。对于需要先手动选账号再重启 Codex 的工作流，可以考虑在 herdr 配置中关闭自动续聊。已有 `[session]` 区域时，将下面的键合并进去，不要重复创建该区域：
+
+```toml
+[session]
+resume_agents_on_restore = false
+```
+
+这样可以自行安排身份恢复与 agent 启动，但不会解决正在运行的 agent 之间的凭据刷新竞态。手动重启或续聊前仍按上面的收尾恢复步骤操作。codex-switch 本身不会修改 herdr 配置。
+
 ## 这套方式解决什么、不保证什么
 
 它减少运行中人为切换，并把身份维护集中在任务开始前和所有进程退出后。本地历史仍可在之后跨账号、跨兼容 provider 接续；它不提供认证强隔离、不保证旧 token 永远有效，也不保证所有历史 token 都原样进入下一次模型请求。

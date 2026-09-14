@@ -61,6 +61,20 @@ codex-switch resume "parser" # 按标题关键词继续本地会话
 
 完整的双终端 worktree 示例、三个风险的原因与收尾步骤，见[并行工作流与风险指南](docs/parallel.zh-CN.md)。本地历史还在与登录态可用，是两件不同的事；也应避免多个进程同时恢复并写入同一条对话。
 
+## 推荐搭配：herdr
+
+想把多个并行 agent 放进一个终端界面统一查看？推荐试试 [herdr](https://github.com/herdrdev/herdr)：一个管理编程 agent 终端的 TUI，方便查看各窗格的任务状态，找到需要你处理的任务。
+
+| 工具 | 在这套工作流中的分工 |
+| --- | --- |
+| **herdr** | 管理 agent 的窗格、标签页，集中查看运行中的任务。 |
+| **codex-switch** | 选择保存的账号与 provider 配置，接续本地对话。 |
+| **Git worktree** | 给每个 agent 独立的代码目录与分支。 |
+
+每个 worktree 开一个窗格，再在窗格内按上面的顺序依次启动账号，就能把这套工作流集中在一个界面里。herdr 是可选搭配；codex-switch 不依赖它，这种组合也不会隔离共享的认证文件。
+
+断开 herdr 客户端可以让后台服务和 agent 进程继续运行；服务重启后的会话恢复则会启动新进程，仍需选择正确身份。详细操作见[herdr 搭配说明](docs/parallel.zh-CN.md#用-herdr-集中管理终端)和 [herdr 快速入门](https://herdr.dev/docs/quick-start/)。
+
 ## 官方多账号使用
 
 **适合两个或多个官方账号，provider 通常都为 `openai` 的场景。** 重点是切换登录身份，同时保留本地已有工作。

@@ -61,6 +61,20 @@ Three risks remain: a newly started process can pick up the wrong account; token
 
 See the [full parallel guide](docs/parallel.md) for two-terminal worktree commands, the three failure modes, and recovery. A retained local history and reliable authentication are separate requirements. Avoid resuming the same conversation simultaneously from multiple writers.
 
+## Recommended companion: herdr
+
+Want to keep parallel agents in one terminal interface? Try [herdr](https://github.com/herdrdev/herdr), a TUI for managing coding-agent terminals and seeing which panes need attention.
+
+| Tool | Role in this workflow |
+| --- | --- |
+| **herdr** | Organize agent panes and tabs; keep an overview of running tasks. |
+| **codex-switch** | Select saved account/provider profiles and continue local conversations. |
+| **Git worktree** | Give each agent a separate code directory and branch. |
+
+Open a pane per worktree, then follow the sequential startup steps above inside those panes. This is an optional companion workflow; herdr is not required by codex-switch and does not isolate shared credentials.
+
+Detaching the herdr client can leave its server and agent processes running. A server restart is different: restoring an agent launches a new process and requires the intended authentication. See the [herdr setup notes](docs/parallel.md#using-herdr-as-your-terminal-interface) and [herdr's quick start](https://herdr.dev/docs/quick-start/).
+
 ## Multiple official accounts
 
 **Use this for two or more official accounts that normally share the `openai` provider.** The main task is switching authentication while keeping your local work available.

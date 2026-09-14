@@ -98,6 +98,25 @@ codex-switch resume "parser"
 
 Select the correct account during login. `relogin` restores the profile's saved configuration; if that configuration was also saved incorrectly, inspect and correct it. For a relay/API-key provider, recover using its supported authentication method rather than treating official OAuth re-login as a universal repair.
 
+## Using herdr as your terminal interface
+
+[herdr](https://github.com/herdrdev/herdr) is an optional TUI companion for keeping agent terminals together. The division of responsibilities is simple: herdr manages panes, codex-switch selects profiles, and Git worktrees separate code directories. This is a documented workflow suggestion, not a bundled integration or an end-to-end compatibility test.
+
+1. Install herdr using its [official quick start](https://herdr.dev/docs/quick-start/), then run `herdr` in your code project.
+2. Create one pane per worktree using herdr's split controls. In each pane, change into the intended worktree and use the account-specific startup commands above, completing one startup before the next.
+3. Keep the agents running on their assigned tasks. herdr's pane status helps you see which agent needs attention; it does not verify that agent's ChatGPT account.
+
+**Detaching is different from restarting.** With herdr's server still running, `Ctrl+B`, then `Q`, detaches the client; running `herdr` reattaches. Restarting the server or machine ends the old processes. Restored agents are new processes, so the shared-home authentication rules still apply.
+
+According to [herdr's session-state documentation](https://herdr.dev/docs/session-state/), native agent resume on server restore is enabled by default. For a workflow that requires manual account selection before restarting Codex, consider disabling that automatic resume in your herdr configuration. Merge this key into the existing `[session]` section if one exists:
+
+```toml
+[session]
+resume_agents_on_restore = false
+```
+
+This leaves account recovery and agent startup under your control; it does not prevent credential refresh races between agents that are already running. Before manually restarting or resuming, follow the recovery steps above. No herdr configuration is changed by codex-switch.
+
 ## What this pattern establishes
 
 It reduces manual switching during work and moves identity maintenance to preparation and post-shutdown recovery. Existing local history remains available for later cross-account or compatible cross-provider continuation. It does not guarantee isolated authentication, permanently valid tokens, or that every historical token fits in the next model request.
