@@ -90,20 +90,20 @@ cmd_save() {
   [ $# -eq 1 ] || die "用法：codex-switch save <名字>"
   local name="$1"
   local d="$PROFILES_DIR/$name"
-  [ -f "$AUTH_FILE" ]   || die "没有找到 $AUTH_FILE，请先 codex login 登录"
+  [ -f "$AUTH_FILE" ]   || die "没有找到 ${AUTH_FILE}，请先 codex login 登录"
   [ -f "$CONFIG_FILE" ] || die "没有找到 $CONFIG_FILE"
   mkdir -p "$d"
   cp "$AUTH_FILE"   "$d/auth.json"
   cp "$CONFIG_FILE" "$d/config.toml"
   echo "$name" > "$CURRENT_FILE"
-  echo "已保存 profile「$name」  provider=$(cfg_provider "$CONFIG_FILE")  account_id=$(aid_of "$AUTH_FILE")  mode=$(mode_of "$AUTH_FILE")"
+  echo "已保存 profile「${name}」  provider=$(cfg_provider "$CONFIG_FILE")  account_id=$(aid_of "$AUTH_FILE")  mode=$(mode_of "$AUTH_FILE")"
 }
 
 cmd_use() {
   [ $# -eq 1 ] || die "用法：codex-switch use <名字>"
   local name="$1"
   local d="$PROFILES_DIR/$name"
-  [ -f "$d/auth.json" ] || die "profile「$name」不存在（可用 codex-switch list 查看）"
+  [ -f "$d/auth.json" ] || die "profile「${name}」不存在（可用 codex-switch list 查看）"
 
   # 切走前：把当前登录态 + 配置刷新回「当前」profile（CURRENT_FILE 记录的那个）
   local curprof=""
@@ -112,7 +112,7 @@ cmd_use() {
     if [ -f "$AUTH_FILE" ]; then
       cp "$AUTH_FILE" "$PROFILES_DIR/$curprof/auth.json"
       [ -f "$CONFIG_FILE" ] && cp "$CONFIG_FILE" "$PROFILES_DIR/$curprof/config.toml"
-      echo "已把当前登录态刷新回 profile「$curprof」"
+      echo "已把当前登录态刷新回 profile「${curprof}」"
     fi
   fi
 
@@ -128,7 +128,7 @@ cmd_use() {
   cp "$d/auth.json" "$AUTH_FILE"
   [ -f "$d/config.toml" ] && cp "$d/config.toml" "$CONFIG_FILE"
   echo "$name" > "$CURRENT_FILE"
-  echo "已切换到「$name」  provider=$(cfg_provider "$CONFIG_FILE")  account_id=$(aid_of "$AUTH_FILE")  mode=$(mode_of "$AUTH_FILE")"
+  echo "已切换到「${name}」  provider=$(cfg_provider "$CONFIG_FILE")  account_id=$(aid_of "$AUTH_FILE")  mode=$(mode_of "$AUTH_FILE")"
 
   if command -v codex >/dev/null 2>&1; then
     echo "--- codex login status ---"
@@ -149,10 +149,10 @@ cmd_relogin() {
   local d="$PROFILES_DIR/$name"
   command -v codex >/dev/null 2>&1 || die "找不到 codex 命令"
   if [ -n "$device_auth" ]; then
-    echo "即将用设备码登录，请选择「$name」对应的账号。"
+    echo "即将用设备码登录，请选择「${name}」对应的账号。"
     codex login --device-auth || die "codex login 失败"
   else
-    echo "即将在浏览器里登录，请选择「$name」对应的账号（建议无痕窗口）。"
+    echo "即将在浏览器里登录，请选择「${name}」对应的账号（建议无痕窗口）。"
     codex login || die "codex login 失败"
   fi
   [ -f "$AUTH_FILE" ] || die "登录后没有生成 $AUTH_FILE"
@@ -165,7 +165,7 @@ cmd_relogin() {
     cp "$CONFIG_FILE" "$d/config.toml"
   fi
   echo "$name" > "$CURRENT_FILE"
-  echo "已重新登录并保存为「$name」  provider=$(cfg_provider "$CONFIG_FILE")  account_id=$(aid_of "$AUTH_FILE")  mode=$(mode_of "$AUTH_FILE")"
+  echo "已重新登录并保存为「${name}」  provider=$(cfg_provider "$CONFIG_FILE")  account_id=$(aid_of "$AUTH_FILE")  mode=$(mode_of "$AUTH_FILE")"
 }
 
 cmd_list() {
@@ -216,10 +216,10 @@ cmd_delete() {
   [ $# -eq 1 ] || die "用法：codex-switch delete <名字>"
   local name="$1"
   local d="$PROFILES_DIR/$name"
-  [ -d "$d" ] || die "profile「$name」不存在"
+  [ -d "$d" ] || die "profile「${name}」不存在"
   rm -rf "$d"
   [ -f "$CURRENT_FILE" ] && [ "$(cat "$CURRENT_FILE")" = "$name" ] && rm -f "$CURRENT_FILE"
-  echo "已删除 profile「$name」"
+  echo "已删除 profile「${name}」"
 }
 
 cmd_sessions() {
@@ -277,7 +277,7 @@ con.close()
 PY
 )"
   if [ -z "$out" ]; then
-    die "没有标题匹配「$kw」的会话（codex-switch sessions 可看全部）"
+    die "没有标题匹配「${kw}」的会话（codex-switch sessions 可看全部）"
   fi
   local n; n="$(printf '%s\n' "$out" | wc -l)"
   if [ "$n" -gt 1 ]; then

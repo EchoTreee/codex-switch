@@ -14,9 +14,10 @@
 
 ### Corrected
 
+- Braced variables next to Chinese punctuation in CLI messages so macOS Bash does not consume part of a UTF-8 character as a variable name and abort. The existing Linux/macOS smoke suite covers these command paths.
 - Distinguished read-only session lookup from authenticated resume; documented shared-home parallel use as author-reported experience rather than guaranteed isolation or a fixed token lifetime.
 - Installation instructions now use a clone, as required by the existing installer.
 - Device-code examples put `--device-auth` before the profile name.
 - Clarified shared-home concurrency, snapshot behavior, credential storage, and session compatibility limits.
 
-The main script and installer behavior are unchanged in this documentation and repository-maintenance update.
+Account switching and installer logic are unchanged; the CLI message fix restores command execution on affected macOS Bash versions.
