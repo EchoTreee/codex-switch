@@ -1,0 +1,313 @@
+#!/usr/bin/env bash
+# codex-switch — Codex 多账号登录切换器
+#
+# 原理：Codex 的登录态 = ~/.codex/auth.json（OAuth token 或 API key）
+#                             + ~/.codex/config.toml（model_provider / base_url）。
+#       对话记录存本地 ~/.codex/sessions/，跟账号无关，换账号不会丢。
+#       每个 profile 存成目录：auth.json + config.toml，一键备份 / 切换 / 查看。
+#
+# 用法：
+#   codex-switch save <名字>       把当前登录态 + 配置存成 profile
+#   codex-switch use  <名字>       切换到某个 profile（自动备份当前到 previous.*）
+#   codex-switch relogin <名字>    重新登录后存成 profile（token 失效时用；加 --device-auth 用设备码）
+#   codex-switch list              列出所有 profile 和当前登录的账号
+#   codex-switch sessions          列出所有会话（id+provider+标题），方便 codex resume <id>
+#   codex-switch resume <关键词>   按标题关键词恢复会话，自动用当前 provider/model（跨 provider 恢复）
+#   codex-switch status            查看当前登录态与配置
+#   codex-switch delete <名字>     删除某个 profile
+#   codex-switch help              显示帮助
+#
+# 注意：
+#   - 切换账号不要用 codex logout —— logout 会在服务器端吊销 refresh token，
+#     导致已保存的 profile 失效。切换直接用 codex-switch use。
+#   - 中转站（自定义 base_url 的 provider）的 API key 走 OPENAI_API_KEY 环境变量，
+#     需要你在 .bashrc / .profile 里 export 好，本脚本只负责切换 config.toml。
+#
+# 环境变量：
+#   CODEX_HOME          codex 配置目录（默认 ~/.codex）
+#   CODEX_SWITCH_DIR    profile 存放目录（默认 ~/.config/codex-switch）
+
+set -euo pipefail
+
+CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+AUTH_FILE="$CODEX_HOME/auth.json"
+CONFIG_FILE="$CODEX_HOME/config.toml"
+STORE_DIR="${CODEX_SWITCH_DIR:-$HOME/.config/codex-switch}"
+PROFILES_DIR="$STORE_DIR/profiles"
+CURRENT_FILE="$STORE_DIR/current"
+
+# 从 auth.json 提取 account_id 和登录方式，输出 "account_id|mode"
+info() {
+  local f="$1"
+  [ -f "$f" ] || { echo "?|missing"; return; }
+  python3 - "$f" <<'PY'
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    t = d.get("tokens") or {}
+    aid = t.get("account_id") or d.get("account_id") or "?"
+    mode = d.get("auth_mode") or ("api-key" if d.get("OPENAI_API_KEY") else "?")
+    print(f"{aid}|{mode}")
+except Exception:
+    print("?|parse-error")
+PY
+}
+
+aid_of()  { info "$1" | cut -d'|' -f1; }
+mode_of() { info "$1" | cut -d'|' -f2; }
+
+# 从 config.toml 提取 model_provider（缺省按 codex 默认 openai）
+cfg_provider() {
+  local f="$1" v=""
+  [ -f "$f" ] || { echo "?"; return; }
+  v="$(grep -E '^model_provider[[:space:]]*=' "$f" 2>/dev/null | head -1 | sed -E 's/.*=[[:space:]]*"([^"]*)"/\1/')"
+  echo "${v:-openai}"
+}
+
+# 从 config.toml 提取 base_url（中转站用）
+cfg_base_url() {
+  local f="$1" v=""
+  [ -f "$f" ] || { echo "?"; return; }
+  v="$(grep -E '^base_url[[:space:]]*=' "$f" 2>/dev/null | head -1 | sed -E 's/.*=[[:space:]]*"([^"]*)"/\1/')"
+  echo "${v:-?}"
+}
+
+# 从 config.toml 提取 model
+cfg_model() {
+  local f="$1" v=""
+  [ -f "$f" ] || { echo "?"; return; }
+  v="$(grep -E '^model[[:space:]]*=' "$f" 2>/dev/null | head -1 | sed -E 's/.*=[[:space:]]*"([^"]*)"/\1/')"
+  echo "${v:-?}"
+}
+
+die() { echo "错误：$*" >&2; exit 1; }
+
+cmd_help() {
+  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+cmd_save() {
+  [ $# -eq 1 ] || die "用法：codex-switch save <名字>"
+  local name="$1"
+  local d="$PROFILES_DIR/$name"
+  [ -f "$AUTH_FILE" ]   || die "没有找到 $AUTH_FILE，请先 codex login 登录"
+  [ -f "$CONFIG_FILE" ] || die "没有找到 $CONFIG_FILE"
+  mkdir -p "$d"
+  cp "$AUTH_FILE"   "$d/auth.json"
+  cp "$CONFIG_FILE" "$d/config.toml"
+  echo "$name" > "$CURRENT_FILE"
+  echo "已保存 profile「$name」  provider=$(cfg_provider "$CONFIG_FILE")  account_id=$(aid_of "$AUTH_FILE")  mode=$(mode_of "$AUTH_FILE")"
+}
+
+cmd_use() {
+  [ $# -eq 1 ] || die "用法：codex-switch use <名字>"
+  local name="$1"
+  local d="$PROFILES_DIR/$name"
+  [ -f "$d/auth.json" ] || die "profile「$name」不存在（可用 codex-switch list 查看）"
+
+  # 切走前：把当前登录态 + 配置刷新回「当前」profile（CURRENT_FILE 记录的那个）
+  local curprof=""
+  [ -f "$CURRENT_FILE" ] && curprof="$(cat "$CURRENT_FILE")"
+  if [ -n "$curprof" ] && [ -d "$PROFILES_DIR/$curprof" ] && [ "$curprof" != "$name" ]; then
+    if [ -f "$AUTH_FILE" ]; then
+      cp "$AUTH_FILE" "$PROFILES_DIR/$curprof/auth.json"
+      [ -f "$CONFIG_FILE" ] && cp "$CONFIG_FILE" "$PROFILES_DIR/$curprof/config.toml"
+      echo "已把当前登录态刷新回 profile「$curprof」"
+    fi
+  fi
+
+  # 同时备份一份，方便切错时恢复
+  mkdir -p "$STORE_DIR"
+  if [ -f "$AUTH_FILE" ]; then
+    cp "$AUTH_FILE" "$STORE_DIR/previous.auth.json"
+    [ -f "$CONFIG_FILE" ] && cp "$CONFIG_FILE" "$STORE_DIR/previous.config.toml"
+    echo "已把当前登录态备份到 $STORE_DIR/previous.*"
+  fi
+
+  mkdir -p "$(dirname "$AUTH_FILE")"
+  cp "$d/auth.json" "$AUTH_FILE"
+  [ -f "$d/config.toml" ] && cp "$d/config.toml" "$CONFIG_FILE"
+  echo "$name" > "$CURRENT_FILE"
+  echo "已切换到「$name」  provider=$(cfg_provider "$CONFIG_FILE")  account_id=$(aid_of "$AUTH_FILE")  mode=$(mode_of "$AUTH_FILE")"
+
+  if command -v codex >/dev/null 2>&1; then
+    echo "--- codex login status ---"
+    codex login status 2>&1 || true
+  fi
+  echo "提示：若上方提示 refresh token revoked/expired，说明该 profile 登录态已失效；"
+  echo "      请用 codex-switch relogin <名字> 重新登录刷新（不要用 codex logout）。"
+}
+
+cmd_relogin() {
+  local device_auth=""
+  if [ "${1:-}" = "--device-auth" ]; then
+    device_auth="1"
+    shift
+  fi
+  [ $# -eq 1 ] || die "用法：codex-switch relogin [--device-auth] <名字>"
+  local name="$1"
+  local d="$PROFILES_DIR/$name"
+  command -v codex >/dev/null 2>&1 || die "找不到 codex 命令"
+  if [ -n "$device_auth" ]; then
+    echo "即将用设备码登录，请选择「$name」对应的账号。"
+    codex login --device-auth || die "codex login 失败"
+  else
+    echo "即将在浏览器里登录，请选择「$name」对应的账号（建议无痕窗口）。"
+    codex login || die "codex login 失败"
+  fi
+  [ -f "$AUTH_FILE" ] || die "登录后没有生成 $AUTH_FILE"
+  mkdir -p "$d"
+  cp "$AUTH_FILE" "$d/auth.json"
+  # config.toml：优先恢复该 profile 已有的（保持账号对应的 provider 不变），没有才用当前 config
+  if [ -f "$d/config.toml" ]; then
+    cp "$d/config.toml" "$CONFIG_FILE"
+  elif [ -f "$CONFIG_FILE" ]; then
+    cp "$CONFIG_FILE" "$d/config.toml"
+  fi
+  echo "$name" > "$CURRENT_FILE"
+  echo "已重新登录并保存为「$name」  provider=$(cfg_provider "$CONFIG_FILE")  account_id=$(aid_of "$AUTH_FILE")  mode=$(mode_of "$AUTH_FILE")"
+}
+
+cmd_list() {
+  echo "profile 目录：$PROFILES_DIR"
+  if [ ! -d "$PROFILES_DIR" ] || [ -z "$(ls -A "$PROFILES_DIR" 2>/dev/null)" ]; then
+    echo "  （还没有任何 profile，用 codex-switch save <名字> 保存）"
+  else
+    local cur=""
+    [ -f "$CURRENT_FILE" ] && cur="$(cat "$CURRENT_FILE")"
+    local p
+    for p in "$PROFILES_DIR"/*/; do
+      [ -d "$p" ] || continue
+      local pa="${p%/}/auth.json"
+      local pc="${p%/}/config.toml"
+      [ -f "$pa" ] || continue
+      local n; n="$(basename "$p")"
+      local prov; prov="$(cfg_provider "$pc")"
+      local idline
+      if [ "$prov" = "openai" ]; then
+        idline="account_id=$(aid_of "$pa")  mode=$(mode_of "$pa")"
+      else
+        idline="base_url=$(cfg_base_url "$pc")"
+      fi
+      local mark=" "
+      [ "$n" = "$cur" ] && mark="*"
+      printf "  %s %-14s provider=%-8s %s\n" "$mark" "$n" "$prov" "$idline"
+    done
+  fi
+  echo "当前：provider=$(cfg_provider "$CONFIG_FILE")  account_id=$( [ -f "$AUTH_FILE" ] && aid_of "$AUTH_FILE" || echo '无' )"
+}
+
+cmd_status() {
+  echo "auth.json   位置：$AUTH_FILE"
+  echo "config.toml 位置：$CONFIG_FILE"
+  echo "  当前 provider：$(cfg_provider "$CONFIG_FILE")"
+  if [ -f "$AUTH_FILE" ]; then
+    echo "  当前账号：account_id=$(aid_of "$AUTH_FILE")  mode=$(mode_of "$AUTH_FILE")"
+    echo "  文件时间：$(stat -c '%y' "$AUTH_FILE" 2>/dev/null || echo '?')"
+  else
+    echo "  未登录（没有 auth.json）"
+  fi
+  if [ -f "$STORE_DIR/previous.auth.json" ]; then
+    echo "上次切换前的备份：$STORE_DIR/previous.*（account_id=$(aid_of "$STORE_DIR/previous.auth.json")）"
+  fi
+}
+
+cmd_delete() {
+  [ $# -eq 1 ] || die "用法：codex-switch delete <名字>"
+  local name="$1"
+  local d="$PROFILES_DIR/$name"
+  [ -d "$d" ] || die "profile「$name」不存在"
+  rm -rf "$d"
+  [ -f "$CURRENT_FILE" ] && [ "$(cat "$CURRENT_FILE")" = "$name" ] && rm -f "$CURRENT_FILE"
+  echo "已删除 profile「$name」"
+}
+
+cmd_sessions() {
+  local db="$CODEX_HOME/state_5.sqlite"
+  [ -f "$db" ] || die "找不到会话数据库 $db"
+  python3 - "$db" "$CONFIG_FILE" <<'PY'
+import sqlite3, sys, re
+db, cfg = sys.argv[1], sys.argv[2]
+prov = "openai"
+try:
+    for line in open(cfg, encoding="utf-8"):
+        m = re.match(r'\s*model_provider\s*=\s*"([^"]+)"', line)
+        if m:
+            prov = m.group(1)
+except OSError:
+    pass
+con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+cur = con.cursor()
+rows = cur.execute("""
+    SELECT datetime(updated_at,'unixepoch','localtime'), model_provider, id,
+           COALESCE(title,''), source
+    FROM threads
+    WHERE source IN ('cli','exec')
+    ORDER BY updated_at DESC
+""").fetchall()
+print(f"当前 provider：{prov}（* = 与当前 provider 一致；无 * 的会话用 codex resume <id> 可跨 provider 恢复）")
+for t, mp, tid, title, src in rows:
+    mark = "*" if mp == prov else " "
+    print(f"{mark} {t}  {mp:<8} {src:<4} {tid}  {title[:48]}")
+con.close()
+PY
+}
+
+cmd_resume() {
+  [ $# -ge 1 ] || die "用法：codex-switch resume <标题关键词>"
+  local kw="$*"
+  local db="$CODEX_HOME/state_5.sqlite"
+  [ -f "$db" ] || die "找不到会话数据库 $db"
+  local out
+  out="$(python3 - "$db" "$kw" <<'PY'
+import sqlite3, sys
+db, kw = sys.argv[1], sys.argv[2].lower()
+con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+cur = con.cursor()
+rows = cur.execute("""
+    SELECT id, COALESCE(title,''), model_provider,
+           datetime(updated_at,'unixepoch','localtime')
+    FROM threads
+    WHERE source='cli' AND lower(COALESCE(title,'')) LIKE ?
+    ORDER BY updated_at DESC
+""", (f"%{kw}%",)).fetchall()
+for r in rows:
+    print("\t".join(r))
+con.close()
+PY
+)"
+  if [ -z "$out" ]; then
+    die "没有标题匹配「$kw」的会话（codex-switch sessions 可看全部）"
+  fi
+  local n; n="$(printf '%s\n' "$out" | wc -l)"
+  if [ "$n" -gt 1 ]; then
+    echo "匹配到 $n 条，关键词再精确一点，或复制完整 ID 直接 codex resume <id>："
+    printf '%s\n' "$out" | awk -F'\t' '{printf "  %s  %-8s  %s  %s\n", $4, $3, $1, $2}'
+    exit 1
+  fi
+  local id; id="$(printf '%s\n' "$out" | cut -f1)"
+  echo "恢复会话：$(printf '%s\n' "$out" | awk -F'\t' '{print $3" | "$4" | "$2}')"
+  command -v codex >/dev/null 2>&1 || die "找不到 codex 命令"
+  # 用当前 provider/model 恢复（-c 覆盖会把会话重新指向当前 provider，实现双向切换）
+  local prov model
+  prov="$(cfg_provider "$CONFIG_FILE")"; [ "$prov" = "?" ] && prov="openai"
+  model="$(cfg_model "$CONFIG_FILE")"
+  if [ -n "$model" ] && [ "$model" != "?" ]; then
+    exec codex resume "$id" -c "model_provider=\"$prov\"" -c "model=\"$model\""
+  else
+    exec codex resume "$id" -c "model_provider=\"$prov\""
+  fi
+}
+
+case "${1:-help}" in
+  save)     shift; cmd_save "$@" ;;
+  use)      shift; cmd_use "$@" ;;
+  relogin)  shift; cmd_relogin "$@" ;;
+  list)     cmd_list ;;
+  sessions) cmd_sessions ;;
+  resume)   shift; cmd_resume "$@" ;;
+  status)   cmd_status ;;
+  delete)   shift; cmd_delete "$@" ;;
+  help|-h|--help) cmd_help ;;
+  *) cmd_help; exit 1 ;;
+esac

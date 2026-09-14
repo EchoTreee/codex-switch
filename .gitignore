@@ -1,0 +1,8 @@
+# Never commit credentials or profiles.
+# codex-switch stores these OUTSIDE the repo by default (~/.config/codex-switch,
+# ~/.codex), but ignore them here in case anyone runs it inside the checkout.
+*.json
+*.toml
+profiles/
+previous.*
+current
