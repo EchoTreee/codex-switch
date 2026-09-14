@@ -1,0 +1,8 @@
+* text=auto
+/codex-switch text eol=lf
+*.sh text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.svg text eol=lf
+*.png binary

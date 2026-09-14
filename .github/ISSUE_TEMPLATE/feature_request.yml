@@ -1,0 +1,22 @@
+name: Feature request / 功能建议
+description: Describe a workflow that codex-switch could make easier.
+title: "[Feature]: "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do? / 你想完成什么任务？
+      description: Describe the current friction, using no private account data.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior / 期望的行为
+      description: An example command or workflow is helpful.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives / 当前替代方案

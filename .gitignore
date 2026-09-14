@@ -6,3 +6,7 @@
 profiles/
 previous.*
 current
+
+# Local Python test artifacts.
+__pycache__/
+*.py[cod]

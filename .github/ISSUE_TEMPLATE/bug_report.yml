@@ -1,0 +1,37 @@
+name: Bug report / 问题反馈
+description: Report a reproducible problem with installation or a command.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        English / 中文均可。Use fabricated data and redact private details.
+        Never paste credentials, auth.json, full config.toml, or session databases.
+        For sensitive findings, read SECURITY.md first.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment / 环境
+      description: OS, Bash version, Python version, Codex version, and repository commit. No private paths needed.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce / 复现步骤
+      description: Include the exact command with fabricated profile names and data.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 预期行为
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / 实际行为
+      description: Redact account IDs, keys, private URLs, and conversation titles.
+    validations:
+      required: true

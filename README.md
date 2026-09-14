@@ -1,140 +1,153 @@
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="codex-switch — Switch profiles. Keep your workflow." width="100%">
+</p>
+
 # codex-switch
 
-Run multiple [OpenAI Codex CLI](https://github.com/openai/codex) sessions on a single machine — each with a different ChatGPT account — in parallel, while sharing conversation history across them.
+**Save and switch account and provider profiles for OpenAI Codex CLI.**
 
-> 在同一台服务器上开多个终端，让每个 Codex CLI 使用不同的 ChatGPT 账号同时运行；账号之间共享对话记录，并用独立的 Git worktree 并行开发。
+[![MIT license](https://img.shields.io/badge/license-MIT-60d5b0)](LICENSE)
+[![Bash + Python](https://img.shields.io/badge/built_with-Bash_%2B_Python-9bb8ff)](#requirements)
+[![Checks](https://github.com/EchoTreee/codex-switch/actions/workflows/checks.yml/badge.svg)](https://github.com/EchoTreee/codex-switch/actions/workflows/checks.yml)
 
-## Why this exists
+**English** · [简体中文](README.zh-CN.md)
 
-Codex CLI stores your login in a single `~/.codex/auth.json` and your provider config in `~/.codex/config.toml` — which normally means **one account per machine**. `codex-switch` turns `~/.codex` into a **profile manager**, so you can:
+[Install](#install) · [Quick start](#quick-start) · [Commands](#commands) · [Usage guide](docs/usage.md) · [Contribute](CONTRIBUTING.md)
 
-- **Run several accounts at once.** Open multiple terminals; each one runs `codex` against a different account (or a relay / 中转站), all on the same box.
-- **Share conversation history between accounts.** Sessions are stored locally in `~/.codex/sessions/` and `~/.codex/state_5.sqlite`, not tied to any account, so any account can list and resume any conversation.
-- **Switch instantly without logging out.** `codex logout` revokes your refresh token server-side and bricks your saved profiles. `codex-switch use` only swaps local files.
-- **Give each account its own Git worktree** so parallel agents never fight over the same working tree.
+Moving between a personal account, a work account, and a custom provider? Give each setup a name. `codex-switch` saves the local authentication and configuration files together, then restores the pair you choose.
+
+```bash
+codex-switch save work       # save your current login + configuration
+codex-switch use personal    # restore a previously saved profile
+codex-switch resume "parser" # resume a matching local session
+```
+
+## Why codex-switch?
+
+| Your workflow | What it helps with |
+| --- | --- |
+| Several accounts | Switch named profiles without manually copying login files. |
+| Several providers | Restore authentication and `config.toml` together. |
+| An unfinished task | Search local session titles and resume with the active provider/model. |
+| A switch you want to undo | Keep a `previous.*` snapshot of the files that were replaced. |
+
+One Bash script with Python's standard library. No build step, background service, or separate account with this project.
+
+> **Scope:** switching affects the selected `CODEX_HOME`. It does not isolate running Codex processes. Stop sessions using that directory before switching; see [parallel use](docs/usage.md#parallel-use) for separate homes.
 
 ## Requirements
 
-- OpenAI [Codex CLI](https://github.com/openai/codex) — tested on `0.153.4`
-- `python3` (for reading session metadata)
-- `bash`
+- Bash, Python 3, and standard Unix command-line tools.
+- [OpenAI Codex CLI](https://github.com/openai/codex), already installed and configured.
+- Git for the installation below.
+- Both `auth.json` and `config.toml` in your Codex home before the first `save`.
+
+Linux is the primary target. On Windows, use a Linux environment such as WSL; these commands are Bash commands. The included workflow runs smoke tests on Linux and macOS, but mock tests do not establish live Codex compatibility. Terminal messages are currently in Chinese.
+
+`sessions` and `resume` depend on Codex's local `state_5.sqlite` database and `threads` schema. They may need updates when Codex changes its storage format. See [compatibility](docs/usage.md#compatibility).
 
 ## Install
 
 ```bash
 git clone https://github.com/EchoTreee/codex-switch.git
 cd codex-switch
-./install.sh            # copies codex-switch into ~/.local/bin
+bash install.sh
+export PATH="$HOME/.local/bin:$PATH"
+codex-switch help
 ```
 
-Or one-shot:
+The installer copies the script to `~/.local/bin`. Keep the `PATH` line in your shell's startup file if that directory is not already on your path. It does not require `sudo`.
+
+<details>
+<summary>Custom directory, updates, and uninstall</summary>
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/EchoTreee/codex-switch/main/install.sh | bash
+# Install into a directory already on your PATH
+bash install.sh /your/bin/directory
+
+# Update from inside this checkout
+git pull --ff-only
+bash install.sh
+
+# Remove the default installed command
+rm "$HOME/.local/bin/codex-switch"
 ```
+
+Uninstalling the command preserves Codex data and saved profiles. The installer needs the main script beside it; run it from a clone, rather than piping `install.sh` from a URL.
+
+</details>
 
 ## Quick start
 
+Start with an existing Codex setup containing both local files. Close Codex sessions that use the same home before changing accounts.
+
 ```bash
-# 1. Log in to Codex as usual, then save the account as a profile
-codex login
+# Save the account and configuration you already use
 codex-switch save work
 
-# 2. Log in to a second account (or a relay), save it too
-codex login              # log into a different account
-codex-switch save home
+# Sign in to another account and save it immediately
+codex login
+codex-switch save personal
 
-# 3. Switch freely
+# Pick a saved setup before starting Codex
 codex-switch use work
-codex-switch use home
-codex-switch list        # list profiles; * marks the active one
+codex
 ```
 
-That's the whole idea: **`save` once per account, then `use` to switch.**
+After an external `codex login` or a manual provider change, run `save <name>` before `use`: switching writes the current files back to the profile recorded as active. Choose the intended account during login and use a distinct name for each setup.
+
+```bash
+codex-switch list             # saved profiles; * marks the recorded active one
+codex-switch status           # local paths, account ID, and provider
+codex-switch sessions         # local CLI / exec sessions
+codex-switch resume "parser"  # use a title keyword matching one CLI session
+```
+
+See [provider setup, recovery, and troubleshooting](docs/usage.md) for the next steps.
 
 ## Commands
 
-| Command | What it does |
-|---|---|
-| `codex-switch save <name>` | Save the current `auth.json` + `config.toml` as a profile |
-| `codex-switch use <name>` | Switch to a profile (backs up the current one first) |
-| `codex-switch relogin <name> [--device-auth]` | Re-login and refresh a profile whose token expired |
-| `codex-switch list` | List all profiles |
-| `codex-switch sessions` | List all sessions (id + provider + title) |
-| `codex-switch resume <keyword>` | Resume a session by title keyword, using the current account/provider |
-| `codex-switch status` | Show the current account and provider |
-| `codex-switch delete <name>` | Delete a profile |
+| Command | Behavior |
+| --- | --- |
+| `save <name>` | Save current authentication and configuration; an existing name is overwritten. |
+| `use <name>` | Refresh the previously active profile, back up current files, and restore the named profile. |
+| `relogin <name>` | Run Codex login, save authentication, and restore that profile's saved configuration if present. |
+| `relogin --device-auth <name>` | Use Codex's device-code login flow. The flag comes before the name. |
+| `list` | Show saved profiles and the recorded active profile. |
+| `status` | Show local file locations and account/provider metadata. |
+| `sessions` | List local sessions from the expected SQLite schema. |
+| `resume <keyword>` | Resume one matching CLI session with current provider/model overrides. |
+| `delete <name>` | Remove the saved profile; leave active Codex files untouched. |
+| `help` | Show built-in help. |
 
-## Key concepts & gotchas
+Prefix each command with `codex-switch`. Use simple profile names such as `work`, `personal`, or `relay-dev`; names are currently treated as paths, without validation.
 
-### 1. Never use `codex logout` to switch
+## How it works
 
-`codex logout` revokes the refresh token on OpenAI's servers, which permanently invalidates any profile you saved for that account. Switch with `codex-switch use` instead — it only swaps local files.
-
-### 2. Relays (中转站) need API-key auth
-
-A relay is a custom provider with its own `base_url` (e.g. `https://api.example.com/v1`). Its profile must use `auth_mode = "apikey"`, not a ChatGPT OAuth token:
-
-```bash
-printf '%s' "$RELAY_API_KEY" | codex login --with-api-key
-codex-switch save relay
+```text
+Saved profiles                         Active Codex home
+~/.config/codex-switch/profiles/        ~/.codex/
+├── work/                              ├── auth.json
+│   ├── auth.json          use work ──► ├── config.toml
+│   └── config.toml                     ├── sessions/       (left in place)
+└── personal/                          └── state_5.sqlite  (left in place)
+    ├── auth.json
+    └── config.toml
 ```
 
-If a relay profile accidentally holds a ChatGPT token, Codex will keep trying to refresh it and fail with `refresh token revoked`.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `CODEX_HOME` | `~/.codex` | Authentication, configuration, and session location. |
+| `CODEX_SWITCH_DIR` | `~/.config/codex-switch` | Saved profiles, active-profile marker, and previous snapshot. |
 
-### 3. Cross-provider resume
+Saved profiles and backups contain **unencrypted credentials**. Keep them private. Environment-based API keys and OS keychain credentials are not captured by copying these files. The switcher does not add telemetry or cloud synchronization; commands that invoke Codex retain Codex's own behavior. Read the [security notes](SECURITY.md) before sharing logs or screenshots.
 
-Codex's own `/resume` picker only shows sessions from the *current* provider, and resuming a session uses the provider it was created under. To resume a session under a different account/provider:
+## Contribute
 
-```bash
-codex-switch sessions            # find a keyword from the session's title
-codex-switch resume <keyword>    # resume it with the current profile's provider/model
-```
+Bug reports, compatibility reports, clearer examples, and translations are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), [open an issue](https://github.com/EchoTreee/codex-switch/issues/new/choose), or review the [roadmap](ROADMAP.md).
 
-`codex-switch resume` runs `codex resume <id> -c model_provider=... -c model=...`, which re-points the session to the current provider. It is reversible — resume the same session again under another profile to point it back.
-
-### 4. Multiple accounts, one machine
-
-Each terminal runs its own `codex` process, which reads `~/.codex` **at startup** and keeps it in memory. So the practical pattern is:
-
-```bash
-# terminal 1
-codex-switch use account-a
-codex
-
-# terminal 2
-codex-switch use account-b
-codex
-```
-
-Both processes now hold different accounts and run side by side, sharing the local session store — either one can `codex-switch resume` a conversation the other started.
-
-> **Caveat:** the *active* profile is machine-wide (it's just whichever files are currently in `~/.codex`). A running Codex process may also write back to `~/.codex/auth.json` when it refreshes its token. For strict isolation of two always-on accounts, run each in its own `CODEX_HOME` (or container). For the common "two agents, each on its own account, working in parallel" workflow, one `~/.codex` plus `codex-switch use` per terminal is enough.
-
-### 5. Independent Git worktrees
-
-Pair each account with a separate checkout so two agents never clobber each other's files:
-
-```bash
-git worktree add ../project-b feature/b
-cd ../project-b
-codex-switch use account-b
-codex
-```
-
-## Environment variables
-
-- `CODEX_HOME` — Codex config dir (default `~/.codex`)
-- `CODEX_SWITCH_DIR` — where profiles are stored (default `~/.config/codex-switch`)
+If this saves you time, a star helps others discover it. Sharing a reproducible workflow is especially useful.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
----
-
-## 中文说明
-
-`codex-switch` 是 OpenAI Codex CLI 的多账号/多 provider 切换器。核心用法：每个账号 `codex-switch save <名字>` 存一次，之后 `codex-switch use <名字>` 切换；会话记录存在本地 `~/.codex/`，跨账号不丢；配合 `git worktree` 可让多个账号的 agent 并行开发、互不干扰。
-
-三条铁律：**切换永远用 `use`，不要 `codex logout`**（会吊销 token）；**中转站要用 API key 登录**；**跨账号续对话用 `codex-switch resume`**。
+[MIT](LICENSE) © 2026 EchoTreee. An independent community project, not affiliated with or endorsed by OpenAI.

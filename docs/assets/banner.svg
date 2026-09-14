@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="520" viewBox="0 0 1280 520" role="img" aria-labelledby="title desc">
+  <title id="title">codex-switch — Switch profiles. Keep your workflow.</title>
+  <desc id="desc">A local account and provider profile manager for Codex CLI. Example commands show save work, use personal, and resume parser.</desc>
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#101d2c"/><stop offset="1" stop-color="#09121e"/></linearGradient>
+    <linearGradient id="accent"><stop stop-color="#65edbc"/><stop offset="1" stop-color="#9cb8ff"/></linearGradient>
+  </defs>
+  <rect width="1280" height="520" rx="24" fill="url(#bg)"/>
+  <path d="M0 462H1280M810 0V520M1120 0V520" stroke="#1c2a3b" stroke-width="1"/>
+  <circle cx="1130" cy="-30" r="220" fill="none" stroke="#233c49"/>
+  <circle cx="1130" cy="-30" r="280" fill="none" stroke="#192e3e"/>
+  <g transform="translate(64 58)">
+    <rect width="52" height="52" rx="15" fill="#142e32" stroke="#2b655d"/>
+    <path d="M12 20h28l-7-7M40 32H12l7 7" fill="none" stroke="#76ebbf" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="70" y="33" fill="#afc3d5" font-family="Arial, Helvetica, sans-serif" font-size="17" letter-spacing="3">CODEX CLI COMPANION</text>
+  </g>
+  <text x="64" y="196" fill="#f0f6fc" font-family="Arial, Helvetica, sans-serif" font-size="66" font-weight="700" letter-spacing="-2">codex-switch</text>
+  <text x="67" y="256" fill="#7befc3" font-family="Arial, Helvetica, sans-serif" font-size="31" font-weight="600">Switch profiles.</text>
+  <text x="67" y="298" fill="#eef5fb" font-family="Arial, Helvetica, sans-serif" font-size="31" font-weight="600">Keep your workflow.</text>
+  <text x="67" y="350" fill="#a7bbcf" font-family="Arial, Helvetica, sans-serif" font-size="18">Account + provider profiles, in one small script.</text>
+  <g font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#b8cbdc">
+    <rect x="66" y="383" width="86" height="30" rx="15" fill="#1b2a3c"/><text x="88" y="403">BASH</text>
+    <rect x="162" y="383" width="108" height="30" rx="15" fill="#1b2a3c"/><text x="181" y="403">PYTHON 3</text>
+    <rect x="280" y="383" width="68" height="30" rx="15" fill="#1b2a3c"/><text x="301" y="403">MIT</text>
+  </g>
+  <rect x="670" y="110" width="545" height="298" rx="18" fill="#0b1420" stroke="#314455"/>
+  <path d="M688 110H1197Q1215 110 1215 128V155H670V128Q670 110 688 110" fill="#182637"/>
+  <circle cx="694" cy="133" r="5" fill="#ec8d8d"/><circle cx="713" cy="133" r="5" fill="#e6c77a"/><circle cx="732" cy="133" r="5" fill="#75cfaf"/>
+  <text x="765" y="138" fill="#a9bccd" font-family="Arial, Helvetica, sans-serif" font-size="13">workflow.sh</text>
+  <g font-family="Consolas, 'Courier New', monospace" font-size="20">
+    <text x="698" y="210" fill="#71ebba">$ <tspan fill="#eef5fc">codex-switch save work</tspan></text>
+    <text x="698" y="264" fill="#71ebba">$ <tspan fill="#eef5fc">codex-switch use personal</tspan></text>
+    <text x="698" y="318" fill="#71ebba">$ <tspan fill="#eef5fc">codex-switch resume &quot;parser&quot;</tspan></text>
+  </g>
+  <text x="700" y="378" fill="#93a9bd" font-family="Arial, Helvetica, sans-serif" font-size="12" letter-spacing="1">EXAMPLE COMMANDS · SAVED PROFILES REQUIRED</text>
+  <rect x="64" y="461" width="116" height="2" fill="url(#accent)"/>
+  <text x="66" y="494" fill="#839bb2" font-family="Arial, Helvetica, sans-serif" font-size="13">github.com/EchoTreee/codex-switch</text>
+  <text x="1215" y="494" text-anchor="end" fill="#839bb2" font-family="Arial, Helvetica, sans-serif" font-size="13">Independent community project</text>
+</svg>
