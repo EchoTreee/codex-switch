@@ -49,7 +49,7 @@ codex-switch sessions
 codex-switch resume "parser regression"
 ```
 
-`sessions` reads CLI and exec sessions from the expected local database **without a provider or working-directory filter**. The `*` marker identifies the current provider; it does not exclude other providers. `resume` also searches across providers, but only searches CLI session titles, using SQLite `LIKE`; `%` and `_` act as wildcards. Zero or multiple matches stop with an error instead of choosing a session automatically. Use a more specific keyword if necessary.
+`sessions` reads CLI and exec sessions from the expected local database **without a provider or working-directory filter**. The `*` marker identifies the current provider; it does not exclude other providers. `resume` also searches across providers: it matches CLI session titles with SQLite `LIKE` (`%` and `_` act as wildcards), or — when the argument is a session-ID-shaped prefix (hex/hyphen, 8+ characters) — it matches session IDs by prefix instead. Zero or multiple matches stop with an error instead of choosing a session automatically. Use a more specific keyword or a longer ID prefix if necessary.
 
 With a single match, the script runs `codex resume <id>` with `-c` overrides from the active configuration. A provider override is always supplied; a model override is supplied if the script finds a model. The database lookup itself is read-only. Once launched, Codex may update session state.
 

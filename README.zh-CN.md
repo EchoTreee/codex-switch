@@ -21,7 +21,7 @@
 ```bash
 codex-switch save work       # 保存当前登录态和配置
 codex-switch use personal    # 切换到已经保存的个人配置
-codex-switch resume "parser" # 按标题关键词继续本地会话
+codex-switch resume "parser" # 按标题关键词或会话 ID 继续本地会话
 ```
 
 ## 六个核心优势
@@ -105,7 +105,7 @@ codex-switch use official-personal
 codex resume                  # 选择同一条会话继续
 ```
 
-要精确恢复，可把会话 ID 填入 `codex resume "your-session-id"`。也可以用 `codex-switch sessions` 查找，再用 `codex-switch resume "parser"` 按标题恢复，并显式采用当前 profile 的模型设置。
+要精确恢复，可以直接把会话 ID 传给 `codex-switch resume "your-session-id"`，或填入原生 `codex resume`。也可以用 `codex-switch sessions` 查找，再用 `codex-switch resume "parser"` 按标题恢复，并显式采用当前 profile 的模型设置。
 
 ### 为什么通常直接 resume 就够了？
 
@@ -241,7 +241,7 @@ codex
 codex-switch list             # 查看已保存的 profile，* 表示记录的活跃项
 codex-switch status           # 查看本地路径、账号 ID 和 provider
 codex-switch sessions         # 列出本地 CLI / exec 会话
-codex-switch resume "parser"  # 关键词需要唯一匹配一个 CLI 会话
+codex-switch resume "parser"  # 标题关键词或会话 ID，需唯一匹配一个 CLI 会话
 ```
 
 设备码重新登录的正确顺序是：
@@ -263,7 +263,7 @@ codex-switch relogin --device-auth work
 | `list` | 列出 profile 和记录的活跃项。 |
 | `status` | 查看本地文件路径和账号/provider 元信息。 |
 | `sessions` | 从预期的 SQLite 表结构读取本地会话。 |
-| `resume <关键词>` | 用当前 provider/model 参数恢复唯一匹配的 CLI 会话。 |
+| `resume <关键词或ID>` | 用当前 provider/model 参数恢复唯一匹配的 CLI 会话（按标题关键词或会话 ID）。 |
 | `delete <名字>` | 删除已保存的 profile，不删除当前 Codex 登录文件。 |
 | `help` | 查看内置帮助。 |
 

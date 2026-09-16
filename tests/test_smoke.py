@@ -165,6 +165,31 @@ class CliSmokeTests(unittest.TestCase):
             "resume", "fixture-cli-1", "-c", 'model_provider="new-provider"', "-c", 'model="new-model"',
         ])
 
+    def test_resume_by_session_id(self):
+        self.seed(provider="new-provider", model="new-model")
+        with closing(sqlite3.connect(self.home / "state_5.sqlite")) as db:
+            db.execute(
+                "CREATE TABLE threads "
+                "(id TEXT, title TEXT, model_provider TEXT, updated_at INTEGER, source TEXT)"
+            )
+            db.executemany("INSERT INTO threads VALUES (?, ?, ?, ?, ?)", [
+                ("01a07ed8-18ce-7a02-9f06-e00bf007b95d", "Main experiment", "openai", 1700000000, "cli"),
+                ("01a0aaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "Other experiment", "openai", 1700000001, "cli"),
+            ])
+            db.commit()
+        # 完整 ID 唯一命中
+        self.run_cli("resume", "01a07ed8-18ce-7a02-9f06-e00bf007b95d")
+        self.assertEqual(json.loads(self.calls.read_text()), [
+            "resume", "01a07ed8-18ce-7a02-9f06-e00bf007b95d",
+            "-c", 'model_provider="new-provider"', "-c", 'model="new-model"',
+        ])
+        # ID 前缀唯一命中
+        self.run_cli("resume", "01a0aaaa")
+        self.assertEqual(json.loads(self.calls.read_text()), [
+            "resume", "01a0aaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+            "-c", 'model_provider="new-provider"', "-c", 'model="new-model"',
+        ])
+
     def test_installer_from_another_directory_and_destination_with_spaces(self):
         destination = self.base / "custom bin"
         result = subprocess.run(
