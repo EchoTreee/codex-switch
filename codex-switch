@@ -12,7 +12,7 @@
 #   codex-switch relogin <名字>    重新登录后存成 profile（token 失效时用；加 --device-auth 用设备码）
 #   codex-switch list              列出所有 profile 和当前登录的账号
 #   codex-switch sessions          列出所有会话（id+provider+标题），方便 codex resume <id>
-#   codex-switch resume <关键词>   按标题关键词恢复会话，自动用当前 provider/model（跨 provider 恢复）
+#   codex-switch resume <关键词|ID>   按标题关键词或会话 ID 恢复，自动用当前 provider/model（跨 provider 恢复）
 #   codex-switch status            查看当前登录态与配置
 #   codex-switch delete <名字>     删除某个 profile
 #   codex-switch help              显示帮助
@@ -254,34 +254,45 @@ PY
 }
 
 cmd_resume() {
-  [ $# -ge 1 ] || die "用法：codex-switch resume <标题关键词>"
+  [ $# -ge 1 ] || die "用法：codex-switch resume <标题关键词|会话ID>"
   local kw="$*"
   local db="$CODEX_HOME/state_5.sqlite"
   [ -f "$db" ] || die "找不到会话数据库 $db"
   local out
   out="$(python3 - "$db" "$kw" <<'PY'
-import sqlite3, sys
+import sqlite3, sys, re
 db, kw = sys.argv[1], sys.argv[2].lower()
+# 输入像会话 ID（十六进制/连字符，≥8 位）就按 id 前缀匹配，否则按标题关键词
+by_id = re.fullmatch(r'[0-9a-f-]{8,}', kw) is not None
 con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
 cur = con.cursor()
-rows = cur.execute("""
-    SELECT id, COALESCE(title,''), model_provider,
-           datetime(updated_at,'unixepoch','localtime')
-    FROM threads
-    WHERE source='cli' AND lower(COALESCE(title,'')) LIKE ?
-    ORDER BY updated_at DESC
-""", (f"%{kw}%",)).fetchall()
+if by_id:
+    rows = cur.execute("""
+        SELECT id, COALESCE(title,''), model_provider,
+               datetime(updated_at,'unixepoch','localtime')
+        FROM threads
+        WHERE source='cli' AND lower(id) LIKE ?
+        ORDER BY updated_at DESC
+    """, (kw + '%',)).fetchall()
+else:
+    rows = cur.execute("""
+        SELECT id, COALESCE(title,''), model_provider,
+               datetime(updated_at,'unixepoch','localtime')
+        FROM threads
+        WHERE source='cli' AND lower(COALESCE(title,'')) LIKE ?
+        ORDER BY updated_at DESC
+    """, (f"%{kw}%",)).fetchall()
 for r in rows:
     print("\t".join(r))
 con.close()
 PY
 )"
   if [ -z "$out" ]; then
-    die "没有标题匹配「${kw}」的会话（codex-switch sessions 可看全部）"
+    die "没有匹配「${kw}」的会话（按标题或 ID；codex-switch sessions 可看全部）"
   fi
   local n; n="$(printf '%s\n' "$out" | wc -l)"
   if [ "$n" -gt 1 ]; then
-    echo "匹配到 $n 条，关键词再精确一点，或复制完整 ID 直接 codex resume <id>："
+    echo "匹配到 $n 条，请输入更精确的关键词或更长的 ID 前缀："
     printf '%s\n' "$out" | awk -F'\t' '{printf "  %s  %-8s  %s  %s\n", $4, $3, $1, $2}'
     exit 1
   fi

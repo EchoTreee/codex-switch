@@ -241,7 +241,7 @@ After an external `codex login` or a manual provider change, run `save <name>` b
 codex-switch list             # saved profiles; * marks the recorded active one
 codex-switch status           # local paths, account ID, and provider
 codex-switch sessions         # local CLI / exec sessions
-codex-switch resume "parser"  # use a title keyword matching one CLI session
+codex-switch resume "parser"  # resume by title keyword or session ID
 ```
 
 See [provider setup, recovery, and troubleshooting](docs/usage.md) for the next steps.
@@ -257,7 +257,7 @@ See [provider setup, recovery, and troubleshooting](docs/usage.md) for the next 
 | `list` | Show saved profiles and the recorded active profile. |
 | `status` | Show local file locations and account/provider metadata. |
 | `sessions` | List local sessions from the expected SQLite schema. |
-| `resume <keyword>` | Resume one matching CLI session with current provider/model overrides. |
+| `resume <keyword or id>` | Resume one matching CLI session (by title keyword or session ID) with current provider/model overrides. |
 | `delete <name>` | Remove the saved profile; leave active Codex files untouched. |
 | `help` | Show built-in help. |
 
