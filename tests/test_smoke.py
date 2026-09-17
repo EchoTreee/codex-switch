@@ -190,6 +190,24 @@ class CliSmokeTests(unittest.TestCase):
             "-c", 'model_provider="new-provider"', "-c", 'model="new-model"',
         ])
 
+    def test_resume_multiline_title_counts_once(self):
+        self.seed(provider="new-provider", model="new-model")
+        with closing(sqlite3.connect(self.home / "state_5.sqlite")) as db:
+            db.execute(
+                "CREATE TABLE threads "
+                "(id TEXT, title TEXT, model_provider TEXT, updated_at INTEGER, source TEXT)"
+            )
+            db.executemany("INSERT INTO threads VALUES (?, ?, ?, ?, ?)", [
+                ("fixture-multi", "install codex\nstep two\nstep three", "openai", 1700000000, "cli"),
+            ])
+            db.commit()
+        # 标题含换行时，仍应作为「一条」会话命中，而不是被数成多行
+        self.run_cli("resume", "install codex")
+        self.assertEqual(json.loads(self.calls.read_text()), [
+            "resume", "fixture-multi",
+            "-c", 'model_provider="new-provider"', "-c", 'model="new-model"',
+        ])
+
     def test_installer_from_another_directory_and_destination_with_spaces(self):
         destination = self.base / "custom bin"
         result = subprocess.run(
