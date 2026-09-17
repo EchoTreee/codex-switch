@@ -247,6 +247,7 @@ rows = cur.execute("""
 """).fetchall()
 print(f"当前 provider：{prov}（* = 与当前 provider 一致；无 * 的会话用 codex resume <id> 可跨 provider 恢复）")
 for t, mp, tid, title, src in rows:
+    title = (title or '').replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').strip()
     mark = "*" if mp == prov else " "
     print(f"{mark} {t}  {mp:<8} {src:<4} {tid}  {title[:48]}")
 con.close()
@@ -283,7 +284,11 @@ else:
         ORDER BY updated_at DESC
     """, (f"%{kw}%",)).fetchall()
 for r in rows:
-    print("\t".join(r))
+    rid, title, provider, t = r
+    title = (title or '').replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').strip()
+    if len(title) > 60:
+        title = title[:57] + '...'
+    print("\t".join((rid, title, provider, t)))
 con.close()
 PY
 )"
