@@ -146,10 +146,10 @@ codex-switch save relay
 
 ### 同一个对话，双向切换线路继续
 
-先在同一 Codex home 下保存并验证两套 profile。下面的 `relay` 和 `official` 是已保存的 profile 名字；关键词需唯一匹配一个 CLI 会话。
+先在同一 Codex home 下保存并验证两套 profile。下面的 `relay` 和 `official` 是已保存的 profile 名字；关键词需唯一匹配一个 CLI / VS Code 会话。
 
 ```bash
-codex-switch sessions           # 列出 CLI / exec 会话，不按 provider 过滤
+codex-switch sessions           # 列出 CLI / exec / VS Code 会话，不按 provider 过滤
 codex-switch use relay          # 切换到保存好的中转站配置
 codex-switch resume "parser"    # 自动用当前 provider/model 继续
 
@@ -240,8 +240,8 @@ codex
 ```bash
 codex-switch list             # 查看已保存的 profile，* 表示记录的活跃项
 codex-switch status           # 查看本地路径、账号 ID 和 provider
-codex-switch sessions         # 列出本地 CLI / exec 会话
-codex-switch resume "parser"  # 标题关键词或会话 ID，需唯一匹配一个 CLI 会话
+codex-switch sessions         # 列出本地 CLI / exec / VS Code 会话
+codex-switch resume "parser"  # 标题关键词或会话 ID，需唯一匹配一个 CLI / VS Code 会话
 ```
 
 设备码重新登录的正确顺序是：
@@ -263,7 +263,7 @@ codex-switch relogin --device-auth work
 | `list` | 列出 profile 和记录的活跃项。 |
 | `status` | 查看本地文件路径和账号/provider 元信息。 |
 | `sessions` | 从预期的 SQLite 表结构读取本地会话。 |
-| `resume <关键词或ID>` | 用当前 provider/model 参数恢复唯一匹配的 CLI 会话（按标题关键词或会话 ID）。 |
+| `resume <关键词或ID>` | 用当前 provider/model 参数恢复唯一匹配的 CLI / VS Code 会话（按标题关键词或会话 ID）。 |
 | `delete <名字>` | 删除已保存的 profile，不删除当前 Codex 登录文件。 |
 | `help` | 查看内置帮助。 |
 
