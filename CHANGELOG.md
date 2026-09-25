@@ -4,6 +4,7 @@
 
 ### Added
 
+- `sessions` and `resume` now include VS Code (`source = 'vscode'`) sessions alongside CLI sessions, so sessions created from the VS Code Codex extension are no longer invisible.
 - `resume` accepts a session ID or ID prefix (hex/hyphen, 8+ characters) in addition to a title keyword.
 - Optional herdr companion recommendations in both READMEs and parallel guides, including pane setup and the distinction between detaching and restarting an agent.
 - Six core benefits at the top of both READMEs, plus bilingual parallel-workflow guides covering worktrees, startup identities, token snapshots, and safe timing for recovery.

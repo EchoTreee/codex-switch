@@ -242,7 +242,7 @@ rows = cur.execute("""
     SELECT datetime(updated_at,'unixepoch','localtime'), model_provider, id,
            COALESCE(title,''), source
     FROM threads
-    WHERE source IN ('cli','exec')
+    WHERE source IN ('cli','exec','vscode')
     ORDER BY updated_at DESC
 """).fetchall()
 print(f"当前 provider：{prov}（* = 与当前 provider 一致；无 * 的会话用 codex resume <id> 可跨 provider 恢复）")
@@ -272,7 +272,7 @@ if by_id:
         SELECT id, COALESCE(title,''), model_provider,
                datetime(updated_at,'unixepoch','localtime')
         FROM threads
-        WHERE source='cli' AND lower(id) LIKE ?
+        WHERE source IN ('cli','vscode') AND lower(id) LIKE ?
         ORDER BY updated_at DESC
     """, (kw + '%',)).fetchall()
 else:
@@ -280,7 +280,7 @@ else:
         SELECT id, COALESCE(title,''), model_provider,
                datetime(updated_at,'unixepoch','localtime')
         FROM threads
-        WHERE source='cli' AND lower(COALESCE(title,'')) LIKE ?
+        WHERE source IN ('cli','vscode') AND lower(COALESCE(title,'')) LIKE ?
         ORDER BY updated_at DESC
     """, (f"%{kw}%",)).fetchall()
 for r in rows:

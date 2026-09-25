@@ -49,7 +49,7 @@ codex-switch sessions
 codex-switch resume "parser regression"
 ```
 
-`sessions` reads CLI and exec sessions from the expected local database **without a provider or working-directory filter**. The `*` marker identifies the current provider; it does not exclude other providers. `resume` also searches across providers: it matches CLI session titles with SQLite `LIKE` (`%` and `_` act as wildcards), or — when the argument is a session-ID-shaped prefix (hex/hyphen, 8+ characters) — it matches session IDs by prefix instead. Zero or multiple matches stop with an error instead of choosing a session automatically. Use a more specific keyword or a longer ID prefix if necessary.
+`sessions` reads CLI, exec, and VS Code sessions from the expected local database **without a provider or working-directory filter**. The `*` marker identifies the current provider; it does not exclude other providers. `resume` also searches across providers: it matches CLI / VS Code session titles with SQLite `LIKE` (`%` and `_` act as wildcards), or — when the argument is a session-ID-shaped prefix (hex/hyphen, 8+ characters) — it matches session IDs by prefix instead. Zero or multiple matches stop with an error instead of choosing a session automatically. Use a more specific keyword or a longer ID prefix if necessary.
 
 With a single match, the script runs `codex resume <id>` with `-c` overrides from the active configuration. A provider override is always supplied; a model override is supplied if the script finds a model. The database lookup itself is read-only. Once launched, Codex may update session state.
 
@@ -69,7 +69,7 @@ Distinguish the verified script behavior from Codex's persistence behavior:
 
 | Layer | Behavior and evidence |
 | --- | --- |
-| `codex-switch sessions` | Its SQL has a source filter (`cli` / `exec`), but no provider or working-directory filter. |
+| `codex-switch sessions` | Its SQL has a source filter (`cli` / `exec` / `vscode`), but no provider or working-directory filter. |
 | `codex-switch resume` | Its SQL searches CLI titles without a provider filter. It opens SQLite in read-only mode, then invokes `codex resume` with configuration overrides. |
 | Codex CLI | The [official command reference](https://learn.chatgpt.com/docs/developer-commands?surface=cli#codex-resume) documents resume by ID and global overrides. Local `codex-cli 0.153.4` help also confirms `-c key=value`. |
 | Provider writeback and picker filtering | Reported by the author for their workflow; the official reference does not promise these database details across versions. No live cross-provider validation was performed for this documentation update. |

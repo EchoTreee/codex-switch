@@ -208,6 +208,26 @@ class CliSmokeTests(unittest.TestCase):
             "-c", 'model_provider="new-provider"', "-c", 'model="new-model"',
         ])
 
+    def test_sessions_and_resume_include_vscode(self):
+        self.seed(provider="new-provider", model="new-model")
+        with closing(sqlite3.connect(self.home / "state_5.sqlite")) as db:
+            db.execute(
+                "CREATE TABLE threads "
+                "(id TEXT, title TEXT, model_provider TEXT, updated_at INTEGER, source TEXT)"
+            )
+            db.executemany("INSERT INTO threads VALUES (?, ?, ?, ?, ?)", [
+                ("fixture-vscode", "Editor session", "openai", 1700000000, "vscode"),
+            ])
+            db.commit()
+        # vscode 会话应出现在 sessions 列表里
+        self.assertIn("fixture-vscode", self.run_cli("sessions"))
+        # 也能按标题关键词恢复
+        self.run_cli("resume", "Editor")
+        self.assertEqual(json.loads(self.calls.read_text()), [
+            "resume", "fixture-vscode",
+            "-c", 'model_provider="new-provider"', "-c", 'model="new-model"',
+        ])
+
     def test_installer_from_another_directory_and_destination_with_spaces(self):
         destination = self.base / "custom bin"
         result = subprocess.run(
