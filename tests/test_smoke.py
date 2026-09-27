@@ -236,6 +236,10 @@ class CliSmokeTests(unittest.TestCase):
         sessions = self.home / "sessions"
         sessions.mkdir()
         (sessions / "shared.txt").write_text("shared", encoding="utf-8")
+        # 放一个 app-server-control（含 socket），验证 run 不会软链它（避免 TUI 连全局 app-server 串号）
+        app_ctl = self.home / "app-server-control"
+        app_ctl.mkdir()
+        (app_ctl / "app-server-control.sock").write_text("", encoding="utf-8")
 
         self.run_cli("run", "work")
 
@@ -246,6 +250,8 @@ class CliSmokeTests(unittest.TestCase):
         # sessions 是软链，指向共享 CODEX_HOME，历史互通
         self.assertTrue((homes / "sessions").is_symlink())
         self.assertEqual((homes / "sessions" / "shared.txt").read_text(encoding="utf-8"), "shared")
+        # app-server-control 不软链（避免串号）
+        self.assertFalse((homes / "app-server-control").exists())
         # codex 被调用
         self.assertEqual(json.loads(self.calls.read_text()), [])
 

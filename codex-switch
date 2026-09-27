@@ -338,7 +338,7 @@ cmd_run() {
     base="$(basename "$item")"
     case "$base" in
       auth.json|config.toml) continue ;;
-      .tmp|tmp|thread-writer-locks|shell_snapshots|.sandbox_migration) continue ;;
+      app-server-control|.tmp|tmp|thread-writer-locks|shell_snapshots|.sandbox_migration) continue ;;
       backup-*|config.toml.zipwuu.bak) continue ;;
       *-wal|*-shm) continue ;;
     esac
