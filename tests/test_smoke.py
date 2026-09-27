@@ -35,6 +35,7 @@ class CliSmokeTests(unittest.TestCase):
         self.env.update(
             CODEX_HOME=self.home.as_posix(),
             CODEX_SWITCH_DIR=self.store.as_posix(),
+            CODEX_SWITCH_HOMES_DIR=(self.base / "homes").as_posix(),
             CODEX_TEST_CALLS=self.calls.as_posix(),
             PYTHONIOENCODING="utf-8",
             PATH=str(self.bin) + os.pathsep + self.env.get("PATH", ""),
@@ -227,6 +228,26 @@ class CliSmokeTests(unittest.TestCase):
             "resume", "fixture-vscode",
             "-c", 'model_provider="new-provider"', "-c", 'model="new-model"',
         ])
+
+    def test_run_isolates_auth_and_shares_sessions(self):
+        self.seed()
+        self.run_cli("save", "work")
+        # 共享 CODEX_HOME 里放一个 sessions 目录，验证 run 会软链共享它
+        sessions = self.home / "sessions"
+        sessions.mkdir()
+        (sessions / "shared.txt").write_text("shared", encoding="utf-8")
+
+        self.run_cli("run", "work")
+
+        homes = self.base / "homes" / "work"
+        # auth.json / config.toml 是真实文件（每账号独立，不软链）
+        self.assertTrue((homes / "auth.json").is_file() and not (homes / "auth.json").is_symlink())
+        self.assertTrue((homes / "config.toml").is_file() and not (homes / "config.toml").is_symlink())
+        # sessions 是软链，指向共享 CODEX_HOME，历史互通
+        self.assertTrue((homes / "sessions").is_symlink())
+        self.assertEqual((homes / "sessions" / "shared.txt").read_text(encoding="utf-8"), "shared")
+        # codex 被调用
+        self.assertEqual(json.loads(self.calls.read_text()), [])
 
     def test_installer_from_another_directory_and_destination_with_spaces(self):
         destination = self.base / "custom bin"
