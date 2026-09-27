@@ -260,6 +260,7 @@ codex-switch relogin --device-auth work
 | `use <名字>` | 刷新原活跃 profile、备份当前文件，再恢复目标 profile。 |
 | `relogin <名字>` | 调用 Codex 登录并保存；已有的该 profile 配置会被恢复。 |
 | `relogin --device-auth <名字>` | 通过设备码重新登录；参数在名字前。 |
+| `run <名字> [codex 参数...]` | 用独立 CODEX_HOME 启动 Codex（auth/config 各自独立、会话软链共享），多账号并发不串号。 |
 | `list` | 列出 profile 和记录的活跃项。 |
 | `status` | 查看本地文件路径和账号/provider 元信息。 |
 | `sessions` | 从预期的 SQLite 表结构读取本地会话。 |
@@ -277,7 +278,7 @@ codex-switch relogin --device-auth work
 | `~/.config/codex-switch/profiles/<名字>/` | 该 profile 的 `auth.json` 和 `config.toml`。 |
 | `~/.config/codex-switch/previous.*` | 最近一次切换前的快照，后续切换会覆盖。 |
 
-可用 `CODEX_HOME` 指定 Codex 数据位置，用 `CODEX_SWITCH_DIR` 指定 profile 存储位置。切换只复制登录和配置文件，本地 `sessions/` 与数据库保持原位；独立 Codex home 之间不会自动同步会话。
+可用 `CODEX_HOME` 指定 Codex 数据位置，用 `CODEX_SWITCH_DIR` 指定 profile 存储位置，用 `CODEX_SWITCH_HOMES_DIR` 指定 `run` 创建的隔离 home 根目录（默认 `~/.codex-homes`）。切换只复制登录和配置文件，本地 `sessions/` 与数据库保持原位；独立 Codex home 之间不会自动同步会话。
 
 **profile 和备份中包含未加密凭据。** 请保存在只有自己可访问的位置，不要上传到仓库。环境变量中的 API key 和系统钥匙串中的凭据不会被这些文件快照保存。切换器没有新增遥测或云同步；调用 Codex 的命令仍遵循 Codex 自身行为。详见[安全说明](SECURITY.md)。
 
@@ -289,7 +290,7 @@ codex-switch relogin --device-auth work
 
 **中转站/API provider？** 先按服务方要求配置 Codex 并验证可用，再保存 profile。环境变量形式的 key 需要你自行设置，工具不会替你切换。
 
-**能同时运行不同账号吗？** 作者采用的是集中启动各账号、各自完成任务的[共享 home 并行方式](docs/parallel.zh-CN.md)，需要接受认证刷新和回存竞态。要分开认证文件，则使用不同的 `CODEX_HOME` 和 `CODEX_SWITCH_DIR`，但历史不会自动共享；独立 worktree 只隔离代码目录。
+**能同时运行不同账号吗？** 可以。用 `codex-switch run <名字>` 给每个账号一个独立 CODEX_HOME（auth/config 各自独立、会话软链共享），再各自 `run <账号> codex` 启动即可并发、互不串号，同时历史仍然互通。更早的[共享 home 并行方式](docs/parallel.zh-CN.md)仍需接受认证刷新和回存竞态。
 
 更多细节见[使用指南（英文）](docs/usage.md)。
 

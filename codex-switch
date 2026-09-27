@@ -10,6 +10,7 @@
 #   codex-switch save <名字>       把当前登录态 + 配置存成 profile
 #   codex-switch use  <名字>       切换到某个 profile（自动备份当前到 previous.*）
 #   codex-switch relogin <名字>    重新登录后存成 profile（token 失效时用；加 --device-auth 用设备码）
+#   codex-switch run  <名字>       用独立 CODEX_HOME 启动 codex（多账号并发不串号，[codex 参数] 透传）
 #   codex-switch list              列出所有 profile 和当前登录的账号
 #   codex-switch sessions          列出所有会话（id+provider+标题），方便 codex resume <id>
 #   codex-switch resume <关键词|ID>   按标题关键词或会话 ID 恢复，自动用当前 provider/model（跨 provider 恢复）
@@ -35,6 +36,7 @@ CONFIG_FILE="$CODEX_HOME/config.toml"
 STORE_DIR="${CODEX_SWITCH_DIR:-$HOME/.config/codex-switch}"
 PROFILES_DIR="$STORE_DIR/profiles"
 CURRENT_FILE="$STORE_DIR/current"
+HOMES_DIR="${CODEX_SWITCH_HOMES_DIR:-$HOME/.codex-homes}"
 
 # 从 auth.json 提取 account_id 和登录方式，输出 "account_id|mode"
 info() {
@@ -83,7 +85,7 @@ cfg_model() {
 die() { echo "错误：$*" >&2; exit 1; }
 
 cmd_help() {
-  sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 cmd_save() {
@@ -315,6 +317,39 @@ PY
   fi
 }
 
+cmd_run() {
+  [ $# -ge 1 ] || die "用法：codex-switch run <名字> [codex 参数...]"
+  local name="$1"; shift
+  local src="$PROFILES_DIR/$name"
+  [ -f "$src/auth.json" ] || die "profile「$name」不存在（可用 codex-switch list 查看）"
+  command -v codex >/dev/null 2>&1 || die "找不到 codex 命令"
+
+  local home="$HOMES_DIR/$name"
+  mkdir -p "$home"
+
+  # 每账号独立的真实文件：auth.json + config.toml
+  cp "$src/auth.json" "$home/auth.json"
+  [ -f "$src/config.toml" ] && cp "$src/config.toml" "$home/config.toml"
+
+  # 其余全部软链到共享的 ~/.codex（会话记录、包、插件、skills 等），保证历史互通
+  local item base
+  for item in "$CODEX_HOME"/* "$CODEX_HOME"/.[!.]*; do
+    [ -e "$item" ] || continue
+    base="$(basename "$item")"
+    case "$base" in
+      auth.json|config.toml) continue ;;
+      app-server-control|.tmp|tmp|thread-writer-locks|shell_snapshots|.sandbox_migration) continue ;;
+      backup-*|config.toml.zipwuu.bak) continue ;;
+      *-wal|*-shm) continue ;;
+    esac
+    rm -rf "$home/$base"
+    ln -s "$item" "$home/$base"
+  done
+
+  echo "用「$name」独立 CODEX_HOME 启动 codex → $home"
+  CODEX_HOME="$home" exec codex "$@"
+}
+
 case "${1:-help}" in
   save)     shift; cmd_save "$@" ;;
   use)      shift; cmd_use "$@" ;;
@@ -322,6 +357,7 @@ case "${1:-help}" in
   list)     cmd_list ;;
   sessions) cmd_sessions ;;
   resume)   shift; cmd_resume "$@" ;;
+  run)      shift; cmd_run "$@" ;;
   status)   cmd_status ;;
   delete)   shift; cmd_delete "$@" ;;
   help|-h|--help) cmd_help ;;

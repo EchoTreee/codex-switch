@@ -254,6 +254,7 @@ See [provider setup, recovery, and troubleshooting](docs/usage.md) for the next 
 | `use <name>` | Refresh the previously active profile, back up current files, and restore the named profile. |
 | `relogin <name>` | Run Codex login, save authentication, and restore that profile's saved configuration if present. |
 | `relogin --device-auth <name>` | Use Codex's device-code login flow. The flag comes before the name. |
+| `run <name> [codex args...]` | Launch Codex in an isolated per-account `CODEX_HOME` (own auth/config, shared sessions) for concurrent accounts. |
 | `list` | Show saved profiles and the recorded active profile. |
 | `status` | Show local file locations and account/provider metadata. |
 | `sessions` | List local sessions from the expected SQLite schema. |
@@ -280,6 +281,7 @@ Saved profiles                         Active Codex home
 | --- | --- | --- |
 | `CODEX_HOME` | `~/.codex` | Authentication, configuration, and session location. |
 | `CODEX_SWITCH_DIR` | `~/.config/codex-switch` | Saved profiles, active-profile marker, and previous snapshot. |
+| `CODEX_SWITCH_HOMES_DIR` | `~/.codex-homes` | Root for the isolated per-account homes created by `run`. |
 
 Saved profiles and backups contain **unencrypted credentials**. Keep them private. Environment-based API keys and OS keychain credentials are not captured by copying these files. The switcher does not add telemetry or cloud synchronization; commands that invoke Codex retain Codex's own behavior. Read the [security notes](SECURITY.md) before sharing logs or screenshots.
 

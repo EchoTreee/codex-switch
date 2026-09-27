@@ -4,6 +4,7 @@
 
 ### Added
 
+- `run <name> [codex args...]` launches Codex in an isolated per-account `CODEX_HOME` (own `auth.json`/`config.toml`, symlinked sessions) so multiple accounts can run concurrently without clobbering each other's tokens.
 - `sessions` and `resume` now include VS Code (`source = 'vscode'`) sessions alongside CLI sessions, so sessions created from the VS Code Codex extension are no longer invisible.
 - `resume` accepts a session ID or ID prefix (hex/hyphen, 8+ characters) in addition to a title keyword.
 - Optional herdr companion recommendations in both READMEs and parallel guides, including pane setup and the distinction between detaching and restarting an agent.
