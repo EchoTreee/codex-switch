@@ -321,7 +321,7 @@ cmd_run() {
   [ $# -ge 1 ] || die "用法：codex-switch run <名字> [codex 参数...]"
   local name="$1"; shift
   local src="$PROFILES_DIR/$name"
-  [ -f "$src/auth.json" ] || die "profile「$name」不存在（可用 codex-switch list 查看）"
+  [ -f "$src/auth.json" ] || die "profile「${name}」不存在（可用 codex-switch list 查看）"
   command -v codex >/dev/null 2>&1 || die "找不到 codex 命令"
 
   local home="$HOMES_DIR/$name"
@@ -346,7 +346,7 @@ cmd_run() {
     ln -s "$item" "$home/$base"
   done
 
-  echo "用「$name」独立 CODEX_HOME 启动 codex → $home"
+  echo "用「${name}」独立 CODEX_HOME 启动 codex → $home"
   CODEX_HOME="$home" exec codex "$@"
 }
 
