@@ -9,7 +9,7 @@
 # 用法：
 #   codex-switch save <名字>       把当前登录态 + 配置存成 profile
 #   codex-switch use  <名字>       切换到某个 profile（自动备份当前到 previous.*）
-#   codex-switch relogin <名字>    重新登录后存成 profile（token 失效时用；加 --device-auth 用设备码）
+#   codex-switch relogin <名字>    重新登录后存成 profile（在隔离的临时 home 里登录，不影响其它会话；加 --device-auth 用设备码）
 #   codex-switch run  <名字>       用独立 CODEX_HOME 启动 codex（多账号并发不串号，[codex 参数] 透传）
 #   codex-switch sync <名字>       把独立 CODEX_HOME（run 出来的）的最新登录态回写进 profile
 #   codex-switch list              列出所有 profile 和当前登录的账号
@@ -151,24 +151,33 @@ cmd_relogin() {
   local name="$1"
   local d="$PROFILES_DIR/$name"
   command -v codex >/dev/null 2>&1 || die "找不到 codex 命令"
-  if [ -n "$device_auth" ]; then
-    echo "即将用设备码登录，请选择「${name}」对应的账号。"
-    codex login --device-auth || die "codex login 失败"
-  else
-    echo "即将在浏览器里登录，请选择「${name}」对应的账号（建议无痕窗口）。"
-    codex login || die "codex login 失败"
-  fi
-  [ -f "$AUTH_FILE" ] || die "登录后没有生成 $AUTH_FILE"
-  mkdir -p "$d"
-  cp "$AUTH_FILE" "$d/auth.json"
-  # config.toml：优先恢复该 profile 已有的（保持账号对应的 provider 不变），没有才用当前 config
+  # 登录必须在临时空 home 里执行，不能在共享 CODEX_HOME 里跑：
+  # codex login 会先吊销当前 home 的 refresh_token。在共享 home 里登录，
+  # 上一次 relogin 留下的会话（可能正被 run 出来的并发槽位使用）会被当作旧会话吊销。
+  scratch="$(mktemp -d "${TMPDIR:-/tmp}/codex-switch-login.XXXXXX")" || die "无法创建临时目录"
+  trap 'rm -rf "$scratch" 2>/dev/null || true' EXIT
+  # 带上一份 config.toml：优先该 profile 已有的（保持 provider 一致），否则沿用共享 home 的。
   if [ -f "$d/config.toml" ]; then
-    cp "$d/config.toml" "$CONFIG_FILE"
+    cp "$d/config.toml" "$scratch/config.toml"
   elif [ -f "$CONFIG_FILE" ]; then
+    cp "$CONFIG_FILE" "$scratch/config.toml"
+  fi
+  if [ -n "$device_auth" ]; then
+    echo "即将在隔离的临时 home 里用设备码登录（不影响其它正在运行的会话），请选择「${name}」对应的账号。"
+    CODEX_HOME="$scratch" codex login --device-auth || die "codex login 失败"
+  else
+    echo "即将在隔离的临时 home 里用浏览器登录（不影响其它正在运行的会话），请选择「${name}」对应的账号（建议无痕窗口）。"
+    CODEX_HOME="$scratch" codex login || die "codex login 失败"
+  fi
+  [ -f "$scratch/auth.json" ] || die "登录后没有生成 $scratch/auth.json"
+  mkdir -p "$d"
+  cp "$scratch/auth.json" "$d/auth.json"
+  # config.toml：profile 没有时才补一份；共享 home 的 auth/config 原样保留，不再被动
+  if [ ! -f "$d/config.toml" ] && [ -f "$CONFIG_FILE" ]; then
     cp "$CONFIG_FILE" "$d/config.toml"
   fi
   echo "$name" > "$CURRENT_FILE"
-  echo "已重新登录并保存为「${name}」  provider=$(cfg_provider "$CONFIG_FILE")  account_id=$(aid_of "$AUTH_FILE")  mode=$(mode_of "$AUTH_FILE")"
+  echo "已重新登录并保存为「${name}」  provider=$(cfg_provider "$d/config.toml")  account_id=$(aid_of "$d/auth.json")  mode=$(mode_of "$d/auth.json")"
 }
 
 cmd_list() {
@@ -346,7 +355,7 @@ cmd_run() {
     base="$(basename "$item")"
     case "$base" in
       auth.json|config.toml) continue ;;
-      app-server-control|.tmp|tmp|thread-writer-locks|shell_snapshots|.sandbox_migration) continue ;;
+      app-server-*|.tmp|tmp|thread-writer-locks|shell_snapshots|.sandbox_migration) continue ;;
       backup-*|config.toml.zipwuu.bak) continue ;;
       *-wal|*-shm) continue ;;
     esac

@@ -110,7 +110,7 @@ codex-switch relogin work
 codex-switch relogin --device-auth work
 ```
 
-The device flag must precede the name. Pick the intended account in the login flow. If the profile already contains a saved configuration, `relogin` restores it after login; otherwise it saves the current configuration when available.
+The device flag must precede the name. Pick the intended account in the login flow. Login runs inside a temporary scratch home so that Codex's logout step cannot revoke the shared home's session, or a session a concurrent `run` slot is actively using; the shared home's files are left untouched. The profile keeps its saved configuration, or receives the current one when available.
 
 If a switch selected the wrong existing profile, `use <correct-name>` selects another saved profile. For manual recovery, close running sessions and inspect the `previous.*` snapshot locally before copying it back. It may have already been replaced by another switch; there is no built-in rollback command.
 

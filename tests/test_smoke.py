@@ -32,12 +32,14 @@ class CliSmokeTests(unittest.TestCase):
         self.home.mkdir()
         self.bin.mkdir()
         self.calls = self.base / "codex-calls.txt"
+        self.login_homes = self.base / "codex-login-homes.txt"
         self.env = os.environ.copy()
         self.env.update(
             CODEX_HOME=self.home.as_posix(),
             CODEX_SWITCH_DIR=self.store.as_posix(),
             CODEX_SWITCH_HOMES_DIR=(self.base / "homes").as_posix(),
             CODEX_TEST_CALLS=self.calls.as_posix(),
+            CODEX_TEST_HOMES=self.login_homes.as_posix(),
             PYTHONIOENCODING="utf-8",
             PATH=str(self.bin) + os.pathsep + self.env.get("PATH", ""),
         )
@@ -50,7 +52,10 @@ class CliSmokeTests(unittest.TestCase):
             "pathlib.Path(os.environ['CODEX_TEST_CALLS']).write_text(json.dumps(sys.argv[1:]))\n"
             "if sys.argv[1:] in (['login'], ['login', '--device-auth']):\n"
             "    p = pathlib.Path(os.environ['CODEX_HOME']) / 'auth.json'\n"
-            "    p.write_text(json.dumps({'auth_mode': 'chatgpt', 'tokens': {'account_id': 'fixture-relogin'}}))\n",
+            "    p.write_text(json.dumps({'auth_mode': 'chatgpt', 'tokens': {'account_id': 'fixture-relogin'}}))\n"
+            "    if 'CODEX_TEST_HOMES' in os.environ:\n"
+            "        with open(os.environ['CODEX_TEST_HOMES'], 'a', encoding='utf-8') as f:\n"
+            "            f.write(os.environ.get('CODEX_HOME', '') + '\\n')\n",
             encoding="utf-8",
         )
         self.wrapper("codex", f'exec {python} {shlex.quote(stub.as_posix())} "$@"\n')
@@ -145,12 +150,29 @@ class CliSmokeTests(unittest.TestCase):
     def test_device_login_preserves_saved_provider_config(self):
         _, config = self.seed(provider="saved-provider")
         self.run_cli("save", "work")
-        self.seed(provider="temporary-provider")
+        current_auth, current_config = self.seed(provider="temporary-provider", account="fixture-current")
         self.run_cli("relogin", "--device-auth", "work")
         self.assertEqual(json.loads(self.calls.read_text()), ["login", "--device-auth"])
-        self.assertEqual((self.home / "config.toml").read_bytes(), config)
+        # 共享 home 的 auth/config 原样保留：登录发生在临时 home 里，不碰共享 home
+        self.assertEqual((self.home / "auth.json").read_bytes(), current_auth)
+        self.assertEqual((self.home / "config.toml").read_bytes(), current_config)
+        # profile 保存登录结果，并保留原 provider 配置
         auth = json.loads((self.store / "profiles/work/auth.json").read_text())
         self.assertEqual(auth["tokens"]["account_id"], "fixture-relogin")
+        self.assertEqual((self.store / "profiles/work/config.toml").read_bytes(), config)
+
+    def test_relogin_runs_login_outside_shared_home(self):
+        # 回归：codex login 会先吊销当前 CODEX_HOME 里的 refresh_token。
+        # 若在共享 home 里登录，上一次 relogin 留下的会话（可能正被 run 的
+        # 并发槽位使用）会被当作旧会话吊销，导致正在运行的槽位全部 401。
+        self.seed()
+        self.run_cli("relogin", "--device-auth", "work")
+        lines = self.login_homes.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertNotIn(self.home.as_posix(), lines[0])
+        self.assertIn("/codex-switch-login.", lines[0])
+        # 临时 home 用后即焚，不留残余
+        self.assertFalse(os.path.exists(lines[0]))
 
     def test_session_selection_and_provider_model_forwarding(self):
         self.seed(provider="new-provider", model="new-model")

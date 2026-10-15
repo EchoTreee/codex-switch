@@ -19,6 +19,7 @@
 
 ### Corrected
 
+- `relogin` now runs `codex login` inside a scratch `CODEX_HOME` instead of the shared home. `codex login` revokes the current home's refresh token first, so logging in through the shared home invalidated the previous login's session — including a session a concurrent `run` slot was actively using (the slot then fails with `token_revoked` 401s at its next refresh). The shared home's `auth.json`/`config.toml` are now left untouched, and the scratch home is removed afterwards.
 - `run` now removes stray `app-server-*` and `.tmp` symlinks left in an isolated home by earlier versions, so homes created before the exclusion fix self-heal instead of failing to start Codex.
 - `resume` and `sessions` now flatten newlines/tabs in session titles before printing, so a single session whose title spans multiple lines is no longer miscounted as multiple matches.
 - Braced variables next to Chinese punctuation in CLI messages so macOS Bash does not consume part of a UTF-8 character as a variable name and abort. The existing Linux/macOS smoke suite covers these command paths.

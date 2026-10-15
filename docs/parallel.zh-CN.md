@@ -96,7 +96,7 @@ codex-switch relogin official-work
 codex-switch resume "parser"
 ```
 
-登录时选对账号；`relogin` 会恢复该 profile 已保存的配置。如果当前配置本身已经被误存，还需检查并修正它。对中转站/API-key provider，应按其支持的认证方式恢复，不能把官方 OAuth 重新登录当成通用修复。
+登录时选对账号；`relogin` 在隔离的临时 home 里登录（不碰共享 home，不会吊销其它正在运行的会话），并保留该 profile 已保存的配置。如果当前配置本身已经被误存，还需检查并修正它。对中转站/API-key provider，应按其支持的认证方式恢复，不能把官方 OAuth 重新登录当成通用修复。
 
 ## 用 herdr 集中管理终端
 
