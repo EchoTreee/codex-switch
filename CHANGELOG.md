@@ -22,6 +22,7 @@
 
 - `status` file time now uses a portable `stat` (GNU `-c` / BSD `-f`), so macOS shows a real timestamp instead of `?`.
 - `run` no longer symlinks `app-server-daemon` into the isolated per-account home and clears a stale symlink left by a failed run, so the Codex daemon can create its own state directory instead of failing with `socket directory path exists and is not a directory`.
+- `relogin` now runs `codex login` inside a scratch `CODEX_HOME` instead of the shared home. `codex login` revokes the current home's refresh token first, so logging in through the shared home invalidated the previous login's session — including a session a concurrent `run` slot was actively using (the slot then fails with `token_revoked` 401s at its next refresh). The shared home's `auth.json`/`config.toml` are now left untouched, and the scratch home is removed afterwards.
 - `run` now removes stray `app-server-*` and `.tmp` symlinks left in an isolated home by earlier versions, so homes created before the exclusion fix self-heal instead of failing to start Codex.
 - Smoke tests no longer require Python 3.10 (`Path.write_text(newline=...)` replaced with `open(newline="\n")`), so they run on macOS's system Python 3.9.
 - `resume` and `sessions` now flatten newlines/tabs in session titles before printing, so a single session whose title spans multiple lines is no longer miscounted as multiple matches.
