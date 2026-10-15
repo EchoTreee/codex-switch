@@ -11,6 +11,7 @@
 #   codex-switch use  <名字>       切换到某个 profile（自动备份当前到 previous.*）
 #   codex-switch relogin <名字>    重新登录后存成 profile（token 失效时用；加 --device-auth 用设备码）
 #   codex-switch run  <名字>       用独立 CODEX_HOME 启动 codex（多账号并发不串号，[codex 参数] 透传）
+#   codex-switch sync <名字>       把独立 CODEX_HOME（run 出来的）的最新登录态回写进 profile
 #   codex-switch list              列出所有 profile 和当前登录的账号
 #   codex-switch sessions          列出所有会话（id+provider+标题），方便 codex resume <id>
 #   codex-switch resume <关键词|ID>   按标题关键词或会话 ID 恢复，自动用当前 provider/model（跨 provider 恢复）
@@ -350,6 +351,29 @@ cmd_run() {
   CODEX_HOME="$home" exec codex "$@"
 }
 
+cmd_sync() {
+  [ $# -eq 1 ] || die "用法：codex-switch sync <名字>"
+  local name="$1"
+  local home="$HOMES_DIR/$name"
+  local src="$home/auth.json"
+  [ -f "$src" ] || die "找不到独立 home 的登录态 $src（先 codex-switch run ${name} 运行过一次）"
+
+  # 还有进程在用这个 home 时提醒：它们继续刷新会轮换 token，
+  # 回写后若新终端也共用这条会话，两边会互相顶掉对方。
+  local live=""
+  live="$(pgrep -f "$home" 2>/dev/null | head -3 || true)"
+  if [ -n "$live" ]; then
+    echo "警告：仍有进程在用 $home（比如正在运行的 agent）。"
+    echo "      它们继续刷新会轮换 token；并发的新终端请使用单独登录的 profile，不要共用这条会话。"
+  fi
+
+  local d="$PROFILES_DIR/$name"
+  mkdir -p "$d"
+  cp "$src" "$d/auth.json"
+  [ -f "$home/config.toml" ] && cp "$home/config.toml" "$d/config.toml"
+  echo "已把独立 home 的登录态回写进 profile「${name}」  account_id=$(aid_of "$src")  mode=$(mode_of "$src")"
+}
+
 case "${1:-help}" in
   save)     shift; cmd_save "$@" ;;
   use)      shift; cmd_use "$@" ;;
@@ -358,6 +382,7 @@ case "${1:-help}" in
   sessions) cmd_sessions ;;
   resume)   shift; cmd_resume "$@" ;;
   run)      shift; cmd_run "$@" ;;
+  sync)     shift; cmd_sync "$@" ;;
   status)   cmd_status ;;
   delete)   shift; cmd_delete "$@" ;;
   help|-h|--help) cmd_help ;;

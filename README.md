@@ -255,6 +255,7 @@ See [provider setup, recovery, and troubleshooting](docs/usage.md) for the next 
 | `relogin <name>` | Run Codex login, save authentication, and restore that profile's saved configuration if present. |
 | `relogin --device-auth <name>` | Use Codex's device-code login flow. The flag comes before the name. |
 | `run <name> [codex args...]` | Launch Codex in an isolated per-account `CODEX_HOME` (own auth/config, shared sessions) for concurrent accounts. |
+| `sync <name>` | Copy the latest authentication from the `run`-created isolated home back into its profile. |
 | `list` | Show saved profiles and the recorded active profile. |
 | `status` | Show local file locations and account/provider metadata. |
 | `sessions` | List local sessions from the expected SQLite schema. |

@@ -261,6 +261,7 @@ codex-switch relogin --device-auth work
 | `relogin <名字>` | 调用 Codex 登录并保存；已有的该 profile 配置会被恢复。 |
 | `relogin --device-auth <名字>` | 通过设备码重新登录；参数在名字前。 |
 | `run <名字> [codex 参数...]` | 用独立 CODEX_HOME 启动 Codex（auth/config 各自独立、会话软链共享），多账号并发不串号。 |
+| `sync <名字>` | 把 run 创建的独立 home 里的最新登录态回写进 profile，免重复登录。 |
 | `list` | 列出 profile 和记录的活跃项。 |
 | `status` | 查看本地文件路径和账号/provider 元信息。 |
 | `sessions` | 从预期的 SQLite 表结构读取本地会话。 |

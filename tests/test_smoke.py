@@ -255,6 +255,20 @@ class CliSmokeTests(unittest.TestCase):
         # codex 被调用
         self.assertEqual(json.loads(self.calls.read_text()), [])
 
+    def test_sync_writes_live_auth_back_into_profile(self):
+        self.seed()
+        self.run_cli("save", "work")
+        homes = self.base / "homes" / "work"
+        homes.mkdir(parents=True)
+        live_auth = '{"auth_mode": "chatgpt", "tokens": {"account_id": "fixture-rotated"}}'
+        (homes / "auth.json").write_text(live_auth, encoding="utf-8")
+        self.run_cli("sync", "work")
+        self.assertEqual(
+            (self.store / "profiles/work/auth.json").read_text(encoding="utf-8"),
+            live_auth,
+        )
+        self.run_cli("sync", "missing", success=False)
+
     def test_installer_from_another_directory_and_destination_with_spaces(self):
         destination = self.base / "custom bin"
         result = subprocess.run(
