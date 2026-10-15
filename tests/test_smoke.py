@@ -10,6 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 
@@ -268,6 +269,23 @@ class CliSmokeTests(unittest.TestCase):
             live_auth,
         )
         self.run_cli("sync", "missing", success=False)
+
+    def test_run_reuses_newer_auth_from_isolated_home(self):
+        self.seed()
+        self.run_cli("save", "work")
+        homes = self.base / "homes" / "work"
+        homes.mkdir(parents=True)
+        live_auth = '{"auth_mode": "chatgpt", "tokens": {"account_id": "fixture-rotated"}}'
+        (homes / "auth.json").write_text(live_auth, encoding="utf-8")
+        future = time.time() + 60
+        os.utime(homes / "auth.json", (future, future))
+        self.run_cli("run", "work")
+        # 独立 home 里较新的登录态被沿用，并回写 profile
+        self.assertEqual((homes / "auth.json").read_text(encoding="utf-8"), live_auth)
+        self.assertEqual(
+            (self.store / "profiles/work/auth.json").read_text(encoding="utf-8"),
+            live_auth,
+        )
 
     def test_installer_from_another_directory_and_destination_with_spaces(self):
         destination = self.base / "custom bin"

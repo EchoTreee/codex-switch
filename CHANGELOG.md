@@ -6,6 +6,7 @@
 
 - `run <name> [codex args...]` launches Codex in an isolated per-account `CODEX_HOME` (own `auth.json`/`config.toml`, symlinked sessions) so multiple accounts can run concurrently without clobbering each other's tokens.
 - `sync <name>` writes the latest authentication from a `run`-created isolated home back into its profile, so tokens rotated by a long-running agent can be reused later without another login.
+- `run` now keeps the isolated home's `auth.json` when it is newer than the profile copy (tokens rotated during the previous run) and writes it back to the profile, so reopening a concurrent slot does not require another login.
 - `sessions` and `resume` now include VS Code (`source = 'vscode'`) sessions alongside CLI sessions, so sessions created from the VS Code Codex extension are no longer invisible.
 - `resume` accepts a session ID or ID prefix (hex/hyphen, 8+ characters) in addition to a title keyword.
 - Optional herdr companion recommendations in both READMEs and parallel guides, including pane setup and the distinction between detaching and restarting an agent.

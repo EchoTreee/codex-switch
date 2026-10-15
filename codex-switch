@@ -329,7 +329,14 @@ cmd_run() {
   mkdir -p "$home"
 
   # 每账号独立的真实文件：auth.json + config.toml
-  cp "$src/auth.json" "$home/auth.json"
+  # auth.json：独立 home 里已有且比 profile 新，说明是上一次运行期间刷新轮换过的活 token，
+  # 沿用并回写 profile，避免新终端拿到被轮换作废的旧 token（免重复登录）。
+  if [ -f "$home/auth.json" ] && [ "$home/auth.json" -nt "$src/auth.json" ]; then
+    cp "$home/auth.json" "$src/auth.json"
+    echo "沿用独立 home 里较新的登录态（已回写 profile）"
+  else
+    cp "$src/auth.json" "$home/auth.json"
+  fi
   [ -f "$src/config.toml" ] && cp "$src/config.toml" "$home/config.toml"
 
   # 其余全部软链到共享的 ~/.codex（会话记录、包、插件、skills 等），保证历史互通
