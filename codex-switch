@@ -354,6 +354,10 @@ cmd_run() {
     ln -s "$item" "$home/$base"
   done
 
+  # 清掉旧版本脚本可能遗留的 app-server-* / .tmp 软链（会让 codex 启动报 daemon 目录冲突），
+  # 让被旧版本污染的 home 自愈。只删软链，不动 codex 自己创建的目录。
+  find "$home" -maxdepth 1 \( -name 'app-server-*' -o -name '.tmp' \) -type l -exec rm -f {} + 2>/dev/null || true
+
   echo "用「${name}」独立 CODEX_HOME 启动 codex → $home"
   CODEX_HOME="$home" exec codex "$@"
 }

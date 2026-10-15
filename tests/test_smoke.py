@@ -287,6 +287,20 @@ class CliSmokeTests(unittest.TestCase):
             live_auth,
         )
 
+    def test_run_removes_stray_app_server_symlinks_from_home(self):
+        self.seed()
+        self.run_cli("save", "work")
+        homes = self.base / "homes" / "work"
+        homes.mkdir(parents=True)
+        stray_daemon = homes / "app-server-daemon"
+        stray_daemon.symlink_to(self.home / "app-server-daemon")
+        stray_tmp = homes / ".tmp"
+        stray_tmp.symlink_to(self.home / ".tmp")
+        self.run_cli("run", "work")
+        # 旧版本遗留的软链被清掉（悬空软链也算软链，用 is_symlink 判断）
+        self.assertFalse(stray_daemon.is_symlink())
+        self.assertFalse(stray_tmp.is_symlink())
+
     def test_installer_from_another_directory_and_destination_with_spaces(self):
         destination = self.base / "custom bin"
         result = subprocess.run(
