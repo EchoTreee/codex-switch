@@ -110,7 +110,9 @@ codex-switch relogin work
 codex-switch relogin --device-auth work
 ```
 
-The device flag must precede the name. Pick the intended account in the login flow. If the profile already contains a saved configuration, `relogin` restores it after login; otherwise it saves the current configuration when available.
+The device flag must precede the name. Pick the intended account in the login flow. Login runs inside a temporary scratch home so that Codex's logout step cannot revoke the shared home's session, or a session a concurrent `run` slot is actively using; the shared home's files are left untouched. The profile keeps its saved configuration, or receives the current one when available.
+
+If `run` still shows the login page right after a successful `relogin`, the isolated home's app-server daemon is still caching the old authentication: a daemon reads `auth.json` only once at startup and keeps the token chain in memory, so new tokens on disk do not take effect until it is stopped. Run `codex-switch daemon-restart <name>`; the next `run` starts a fresh daemon with the new tokens.
 
 If a switch selected the wrong existing profile, `use <correct-name>` selects another saved profile. For manual recovery, close running sessions and inspect the `previous.*` snapshot locally before copying it back. It may have already been replaced by another switch; there is no built-in rollback command.
 
@@ -122,6 +124,7 @@ If a switch selected the wrong existing profile, `use <correct-name>` selects an
 | Missing `auth.json` / `config.toml` | Verify `CODEX_HOME`, complete Codex configuration, and confirm file-based credentials are present. |
 | Saved profile has the wrong account | After an external login, use `save <name>` before switching; check which account was selected. |
 | Expired or rejected credentials | Use `relogin <name>` and verify the intended account. Saved files do not guarantee ongoing login validity. |
+| Login page still appears in `run` after `relogin` | The isolated home's app-server daemon caches the old authentication and never rereads `auth.json`; run `codex-switch daemon-restart <name>` so the next `run` starts fresh. |
 | Missing session database / SQL error | Check that this home has sessions and that its schema matches the version the script expects. |
 | Several session matches | Use a more specific title keyword. |
 | Provider/model error on resume | Verify that the active provider supports the selected model and conversation. |

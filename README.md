@@ -252,9 +252,11 @@ See [provider setup, recovery, and troubleshooting](docs/usage.md) for the next 
 | --- | --- |
 | `save <name>` | Save current authentication and configuration; an existing name is overwritten. |
 | `use <name>` | Refresh the previously active profile, back up current files, and restore the named profile. |
-| `relogin <name>` | Run Codex login, save authentication, and restore that profile's saved configuration if present. |
+| `relogin <name>` | Run Codex login in a scratch home and save the result into the profile; the shared home's auth/config are left untouched. |
 | `relogin --device-auth <name>` | Use Codex's device-code login flow. The flag comes before the name. |
-| `run <name> [codex args...]` | Launch Codex in an isolated per-account `CODEX_HOME` (own auth/config, shared sessions) for concurrent accounts. |
+| `run <name> [codex args...]` | Launch Codex in an isolated per-account `CODEX_HOME` (own auth/config, shared sessions) for concurrent accounts; reuses newer tokens from the previous run. |
+| `sync <name>` | Copy the latest authentication from the `run`-created isolated home back into its profile. |
+| `daemon-restart <name>` | Stop the isolated home's app-server daemon that still caches the old authentication, so the next `run` starts fresh (for when `run` shows a login page right after `relogin`). |
 | `list` | Show saved profiles and the recorded active profile. |
 | `status` | Show local file locations and account/provider metadata. |
 | `sessions` | List local sessions from the expected SQLite schema. |

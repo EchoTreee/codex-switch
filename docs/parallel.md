@@ -96,7 +96,7 @@ codex-switch relogin official-work
 codex-switch resume "parser"
 ```
 
-Select the correct account during login. `relogin` restores the profile's saved configuration; if that configuration was also saved incorrectly, inspect and correct it. For a relay/API-key provider, recover using its supported authentication method rather than treating official OAuth re-login as a universal repair.
+Select the correct account during login. `relogin` logs in inside a scratch home (never the shared home, so other running sessions are not revoked) and keeps the profile's saved configuration; if that configuration was also saved incorrectly, inspect and correct it. For a relay/API-key provider, recover using its supported authentication method rather than treating official OAuth re-login as a universal repair.
 
 ## Using herdr as your terminal interface
 

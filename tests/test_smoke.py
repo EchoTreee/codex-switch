@@ -10,6 +10,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 
@@ -31,12 +32,14 @@ class CliSmokeTests(unittest.TestCase):
         self.home.mkdir()
         self.bin.mkdir()
         self.calls = self.base / "codex-calls.txt"
+        self.login_homes = self.base / "codex-login-homes.txt"
         self.env = os.environ.copy()
         self.env.update(
             CODEX_HOME=self.home.as_posix(),
             CODEX_SWITCH_DIR=self.store.as_posix(),
             CODEX_SWITCH_HOMES_DIR=(self.base / "homes").as_posix(),
             CODEX_TEST_CALLS=self.calls.as_posix(),
+            CODEX_TEST_HOMES=self.login_homes.as_posix(),
             PYTHONIOENCODING="utf-8",
             PATH=str(self.bin) + os.pathsep + self.env.get("PATH", ""),
         )
@@ -49,7 +52,10 @@ class CliSmokeTests(unittest.TestCase):
             "pathlib.Path(os.environ['CODEX_TEST_CALLS']).write_text(json.dumps(sys.argv[1:]))\n"
             "if sys.argv[1:] in (['login'], ['login', '--device-auth']):\n"
             "    p = pathlib.Path(os.environ['CODEX_HOME']) / 'auth.json'\n"
-            "    p.write_text(json.dumps({'auth_mode': 'chatgpt', 'tokens': {'account_id': 'fixture-relogin'}}))\n",
+            "    p.write_text(json.dumps({'auth_mode': 'chatgpt', 'tokens': {'account_id': 'fixture-relogin'}}))\n"
+            "    if 'CODEX_TEST_HOMES' in os.environ:\n"
+            "        with open(os.environ['CODEX_TEST_HOMES'], 'a', encoding='utf-8') as f:\n"
+            "            f.write(os.environ.get('CODEX_HOME', '') + '\\n')\n",
             encoding="utf-8",
         )
         self.wrapper("codex", f'exec {python} {shlex.quote(stub.as_posix())} "$@"\n')
@@ -144,12 +150,29 @@ class CliSmokeTests(unittest.TestCase):
     def test_device_login_preserves_saved_provider_config(self):
         _, config = self.seed(provider="saved-provider")
         self.run_cli("save", "work")
-        self.seed(provider="temporary-provider")
+        current_auth, current_config = self.seed(provider="temporary-provider", account="fixture-current")
         self.run_cli("relogin", "--device-auth", "work")
         self.assertEqual(json.loads(self.calls.read_text()), ["login", "--device-auth"])
-        self.assertEqual((self.home / "config.toml").read_bytes(), config)
+        # 共享 home 的 auth/config 原样保留：登录发生在临时 home 里，不碰共享 home
+        self.assertEqual((self.home / "auth.json").read_bytes(), current_auth)
+        self.assertEqual((self.home / "config.toml").read_bytes(), current_config)
+        # profile 保存登录结果，并保留原 provider 配置
         auth = json.loads((self.store / "profiles/work/auth.json").read_text())
         self.assertEqual(auth["tokens"]["account_id"], "fixture-relogin")
+        self.assertEqual((self.store / "profiles/work/config.toml").read_bytes(), config)
+
+    def test_relogin_runs_login_outside_shared_home(self):
+        # 回归：codex login 会先吊销当前 CODEX_HOME 里的 refresh_token。
+        # 若在共享 home 里登录，上一次 relogin 留下的会话（可能正被 run 的
+        # 并发槽位使用）会被当作旧会话吊销，导致正在运行的槽位全部 401。
+        self.seed()
+        self.run_cli("relogin", "--device-auth", "work")
+        lines = self.login_homes.read_text(encoding="utf-8").splitlines()
+        self.assertEqual(len(lines), 1)
+        self.assertNotIn(self.home.as_posix(), lines[0])
+        self.assertIn("/codex-switch-login.", lines[0])
+        # 临时 home 用后即焚，不留残余
+        self.assertFalse(os.path.exists(lines[0]))
 
     def test_session_selection_and_provider_model_forwarding(self):
         self.seed(provider="new-provider", model="new-model")
@@ -255,6 +278,51 @@ class CliSmokeTests(unittest.TestCase):
         # codex 被调用
         self.assertEqual(json.loads(self.calls.read_text()), [])
 
+    def test_sync_writes_live_auth_back_into_profile(self):
+        self.seed()
+        self.run_cli("save", "work")
+        homes = self.base / "homes" / "work"
+        homes.mkdir(parents=True)
+        live_auth = '{"auth_mode": "chatgpt", "tokens": {"account_id": "fixture-rotated"}}'
+        (homes / "auth.json").write_text(live_auth, encoding="utf-8")
+        self.run_cli("sync", "work")
+        self.assertEqual(
+            (self.store / "profiles/work/auth.json").read_text(encoding="utf-8"),
+            live_auth,
+        )
+        self.run_cli("sync", "missing", success=False)
+
+    def test_run_reuses_newer_auth_from_isolated_home(self):
+        self.seed()
+        self.run_cli("save", "work")
+        homes = self.base / "homes" / "work"
+        homes.mkdir(parents=True)
+        live_auth = '{"auth_mode": "chatgpt", "tokens": {"account_id": "fixture-rotated"}}'
+        (homes / "auth.json").write_text(live_auth, encoding="utf-8")
+        future = time.time() + 60
+        os.utime(homes / "auth.json", (future, future))
+        self.run_cli("run", "work")
+        # 独立 home 里较新的登录态被沿用，并回写 profile
+        self.assertEqual((homes / "auth.json").read_text(encoding="utf-8"), live_auth)
+        self.assertEqual(
+            (self.store / "profiles/work/auth.json").read_text(encoding="utf-8"),
+            live_auth,
+        )
+
+    def test_run_removes_stray_app_server_symlinks_from_home(self):
+        self.seed()
+        self.run_cli("save", "work")
+        homes = self.base / "homes" / "work"
+        homes.mkdir(parents=True)
+        stray_daemon = homes / "app-server-daemon"
+        stray_daemon.symlink_to(self.home / "app-server-daemon")
+        stray_tmp = homes / ".tmp"
+        stray_tmp.symlink_to(self.home / ".tmp")
+        self.run_cli("run", "work")
+        # 旧版本遗留的软链被清掉（悬空软链也算软链，用 is_symlink 判断）
+        self.assertFalse(stray_daemon.is_symlink())
+        self.assertFalse(stray_tmp.is_symlink())
+
     def test_installer_from_another_directory_and_destination_with_spaces(self):
         destination = self.base / "custom bin"
         result = subprocess.run(
@@ -270,6 +338,93 @@ class CliSmokeTests(unittest.TestCase):
             capture_output=True, timeout=30,
         )
         self.assertEqual(help_result.returncode, 0)
+
+
+    def _spawn_fake_daemon(self, homes_dir, name, label="pid-update-loop"):
+        """Spawn a live process whose /proc cmdline matches the daemon patterns."""
+        sleep_bin = shutil.which("sleep")
+        self.assertIsNotNone(sleep_bin)
+        link = self.base / label
+        if not link.exists():
+            link.symlink_to(sleep_bin)
+        home = homes_dir / name
+        home.mkdir(parents=True, exist_ok=True)
+        proc = subprocess.Popen(
+            [str(link), "60"],
+            env={**self.env, "CODEX_HOME": home.as_posix()},
+            cwd=self.base,
+        )
+        self.addCleanup(self._kill_proc, proc)
+        return proc, home
+
+    @staticmethod
+    def _kill_proc(proc):
+        if proc.poll() is None:
+            proc.kill()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+
+    @unittest.skipUnless(os.path.isdir("/proc/self"), "requires /proc to inspect daemon processes")
+    def test_daemon_restart_noop_without_daemon(self):
+        homes = self.base / "homes" / "work"
+        homes.mkdir(parents=True)
+        (homes / "auth.json").write_text("{}", encoding="utf-8")
+        out = self.run_cli("daemon-restart", "work")
+        self.assertIn("无需重启", out)
+
+    @unittest.skipUnless(os.path.isdir("/proc/self"), "requires /proc to inspect daemon processes")
+    def test_daemon_restart_stops_only_its_own_home_daemons(self):
+        self.seed()
+        self.run_cli("save", "work")
+        homes = self.base / "homes"
+        work_proc, _ = self._spawn_fake_daemon(homes, "work")
+        other_proc, _ = self._spawn_fake_daemon(homes, "other", label="pid-update-loop-other")
+        out = self.run_cli("daemon-restart", "work")
+        self.assertIn("已全部停掉", out)
+        work_proc.wait(timeout=10)  # 目标 home 的进程被停掉
+        self.assertIsNone(other_proc.poll())  # 其它 home 的进程不受影响
+
+    @unittest.skipUnless(os.path.isdir("/proc/self"), "requires /proc to inspect daemon processes")
+    def test_relogin_warns_about_running_home_daemon(self):
+        # 回归：relogin 只更新磁盘文件；独立 home 里的旧 daemon 缓存旧 token 链，
+        # 不提醒的话用户 relogin 成功后 run 仍会弹登录页。
+        self.seed()
+        self.run_cli("save", "work")
+        proc, _ = self._spawn_fake_daemon(self.base / "homes", "work")
+        out = self.run_cli("relogin", "--device-auth", "work")
+        self.assertIn("daemon-restart work", out)
+        self.assertIsNone(proc.poll())  # relogin 只提醒，不动正在跑的进程
+
+    @unittest.skipUnless(os.path.isdir("/proc/self"), "requires /proc to inspect daemon processes")
+    def test_run_warns_when_daemon_predates_fresh_auth(self):
+        # run 会把 profile 的 auth.json 复制进 home；home 里已有旧 daemon 时，
+        # 旧 daemon 只在启动时读过一次 auth.json，读不到这份新登录态 → 必须提醒。
+        self.seed()
+        self.run_cli("save", "work")
+        self._spawn_fake_daemon(self.base / "homes", "work")
+        time.sleep(0.5)  # 等假 daemon 完全启动，确保 /proc 里可见
+        out = self.run_cli("run", "work")
+        self.assertIn("daemon-restart work", out)
+
+    @unittest.skipUnless(os.path.isdir("/proc/self"), "requires /proc to inspect daemon processes")
+    def test_run_stays_silent_when_home_auth_is_reused(self):
+        # 反例：run 沿用 home 里较新的登录态（本次没有重写 auth.json）→ 不警告
+        self.seed()
+        self.run_cli("save", "work")
+        homes = self.base / "homes" / "work"
+        homes.mkdir(parents=True)
+        now = time.time()
+        kept = '{"auth_mode": "chatgpt", "tokens": {"account_id": "fixture-kept"}}'
+        (homes / "auth.json").write_text(kept, encoding="utf-8")
+        os.utime(homes / "auth.json", (now, now))
+        os.utime(self.store / "profiles/work/auth.json", (now - 100, now - 100))
+        self._spawn_fake_daemon(self.base / "homes", "work")
+        time.sleep(0.5)
+        out = self.run_cli("run", "work")
+        self.assertNotIn("daemon-restart", out)
+        self.assertEqual((homes / "auth.json").read_text(encoding="utf-8"), kept)
 
 
 if __name__ == "__main__":
