@@ -24,6 +24,7 @@
 - `run` now removes stray `app-server-*` and `.tmp` symlinks left in an isolated home by earlier versions, so homes created before the exclusion fix self-heal instead of failing to start Codex.
 - `resume` and `sessions` now flatten newlines/tabs in session titles before printing, so a single session whose title spans multiple lines is no longer miscounted as multiple matches.
 - Braced variables next to Chinese punctuation in CLI messages so macOS Bash does not consume part of a UTF-8 character as a variable name and abort. The existing Linux/macOS smoke suite covers these command paths.
+- Braced the remaining unbraced variables that sat directly against Chinese punctuation in `sync`/`run`/`daemon-restart` messages (`$src（`, `$home（`, `$dp）`), which still produced invalid UTF-8 on macOS Bash 3.2.
 - Distinguished read-only session lookup from authenticated resume; documented shared-home parallel use as author-reported experience rather than guaranteed isolation or a fixed token lifetime.
 - Installation instructions now use a clone, as required by the existing installer.
 - Device-code examples put `--device-auth` before the profile name.

@@ -399,16 +399,18 @@ class CliSmokeTests(unittest.TestCase):
 
     @unittest.skipUnless(os.path.isdir("/proc/self"), "requires /proc to inspect daemon processes")
     def test_run_warns_when_daemon_predates_fresh_auth(self):
+        # run 会把 profile 的 auth.json 复制进 home；home 里已有旧 daemon 时，
+        # 旧 daemon 只在启动时读过一次 auth.json，读不到这份新登录态 → 必须提醒。
         self.seed()
         self.run_cli("save", "work")
         self._spawn_fake_daemon(self.base / "homes", "work")
-        time.sleep(1.2)  # run 复制进去的 auth.json 比 daemon 启动时间新 → 旧 daemon 读不到
+        time.sleep(0.5)  # 等假 daemon 完全启动，确保 /proc 里可见
         out = self.run_cli("run", "work")
         self.assertIn("daemon-restart work", out)
 
     @unittest.skipUnless(os.path.isdir("/proc/self"), "requires /proc to inspect daemon processes")
-    def test_run_stays_silent_when_daemon_started_after_auth(self):
-        # 反例：daemon 在 auth.json 之后启动，读到的就是最新登录态，不应警告
+    def test_run_stays_silent_when_home_auth_is_reused(self):
+        # 反例：run 沿用 home 里较新的登录态（本次没有重写 auth.json）→ 不警告
         self.seed()
         self.run_cli("save", "work")
         homes = self.base / "homes" / "work"
@@ -418,8 +420,8 @@ class CliSmokeTests(unittest.TestCase):
         (homes / "auth.json").write_text(kept, encoding="utf-8")
         os.utime(homes / "auth.json", (now, now))
         os.utime(self.store / "profiles/work/auth.json", (now - 100, now - 100))
-        time.sleep(1.2)
         self._spawn_fake_daemon(self.base / "homes", "work")
+        time.sleep(0.5)
         out = self.run_cli("run", "work")
         self.assertNotIn("daemon-restart", out)
         self.assertEqual((homes / "auth.json").read_text(encoding="utf-8"), kept)

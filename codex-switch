@@ -366,6 +366,7 @@ cmd_run() {
   command -v codex >/dev/null 2>&1 || die "找不到 codex 命令"
 
   local home="$HOMES_DIR/$name"
+  local auth_written=""
   mkdir -p "$home"
 
   # 每账号独立的真实文件：auth.json + config.toml
@@ -376,6 +377,7 @@ cmd_run() {
     echo "沿用独立 home 里较新的登录态（已回写 profile）"
   else
     cp "$src/auth.json" "$home/auth.json"
+    auth_written=1
   fi
   [ -f "$src/config.toml" ] && cp "$src/config.toml" "$home/config.toml"
 
@@ -398,14 +400,13 @@ cmd_run() {
   # 让被旧版本污染的 home 自愈。只删软链，不动 codex 自己创建的目录。
   find "$home" -maxdepth 1 \( -name 'app-server-*' -o -name '.tmp' \) -type l -exec rm -f {} + 2>/dev/null || true
 
-  # 旧 daemon 只在启动时读过一次 auth.json；登录态文件比它更新 = 它内存里还是旧 token，
-  # 本次 run 会继续弹登录页 —— 提醒先重启 daemon。
-  local dp dstart
-  dp="$(home_daemon_pids "$home" | head -1)"
-  if [ -n "$dp" ] && [ -f "$home/auth.json" ]; then
-    dstart="$(stat -c %Y "/proc/$dp" 2>/dev/null || echo 0)"
-    if [ "$(stat -c %Y "$home/auth.json" 2>/dev/null || echo 0)" -gt "$dstart" ]; then
-      echo "警告：「${name}」的 home 里有旧 app-server daemon（PID $dp）还在用旧登录态，本次 run 可能弹登录页。"
+  # 本次 run 刚重写了 home 的 auth.json，而该 home 已有旧 daemon 在跑：
+  # daemon 只在启动时读过一次 auth.json，内存里还是旧 token，TUI 会继续弹登录页。
+  local dp
+  if [ -n "$auth_written" ]; then
+    dp="$(home_daemon_pids "$home" | head -1)"
+    if [ -n "$dp" ]; then
+      echo "警告：「${name}」的 home 里有旧 app-server daemon（PID ${dp}）还在用旧登录态，本次 run 可能弹登录页。"
       echo "      建议先执行：codex-switch daemon-restart ${name}"
     fi
   fi
@@ -419,14 +420,14 @@ cmd_sync() {
   local name="$1"
   local home="$HOMES_DIR/$name"
   local src="$home/auth.json"
-  [ -f "$src" ] || die "找不到独立 home 的登录态 $src（先 codex-switch run ${name} 运行过一次）"
+  [ -f "$src" ] || die "找不到独立 home 的登录态 ${src}（先 codex-switch run ${name} 运行过一次）"
 
   # 还有进程在用这个 home 时提醒：它们继续刷新会轮换 token，
   # 回写后若新终端也共用这条会话，两边会互相顶掉对方。
   local live=""
   live="$(pgrep -f "$home" 2>/dev/null | head -3 || true)"
   if [ -n "$live" ]; then
-    echo "警告：仍有进程在用 $home（比如正在运行的 agent）。"
+    echo "警告：仍有进程在用 ${home}（比如正在运行的 agent）。"
     echo "      它们继续刷新会轮换 token；并发的新终端请使用单独登录的 profile，不要共用这条会话。"
   fi
 
@@ -441,7 +442,7 @@ cmd_daemon_restart() {
   [ $# -eq 1 ] || die "用法：codex-switch daemon-restart <名字>"
   local name="$1"
   local home="$HOMES_DIR/$name"
-  [ -d "$home" ] || die "没有找到「${name}」的独立 home：$home（先 codex-switch run ${name} 运行过一次）"
+  [ -d "$home" ] || die "没有找到「${name}」的独立 home：${home}（先 codex-switch run ${name} 运行过一次）"
 
   local pids
   pids="$(home_daemon_pids "$home")"
