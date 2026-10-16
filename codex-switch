@@ -12,6 +12,7 @@
 #   codex-switch relogin <名字>    重新登录后存成 profile（在隔离的临时 home 里登录，不影响其它会话；加 --device-auth 用设备码）
 #   codex-switch run  <名字>       用独立 CODEX_HOME 启动 codex（多账号并发不串号，[codex 参数] 透传）
 #   codex-switch sync <名字>       把独立 CODEX_HOME（run 出来的）的最新登录态回写进 profile
+#   codex-switch daemon-restart <名字>  停掉该 home 缓存旧登录态的 app-server daemon（relogin 后仍弹登录页时用）
 #   codex-switch list              列出所有 profile 和当前登录的账号
 #   codex-switch sessions          列出所有会话（id+provider+标题），方便 codex resume <id>
 #   codex-switch resume <关键词|ID>   按标题关键词或会话 ID 恢复，自动用当前 provider/model（跨 provider 恢复）
@@ -85,8 +86,29 @@ cfg_model() {
 
 die() { echo "错误：$*" >&2; exit 1; }
 
+# 找出某个 home 正在运行的 app-server daemon / pid-update-loop 进程 PID。
+# codex 的 daemon 只在启动时读一次 auth.json，之后把 token 链缓存在内存里：
+# relogin/sync 只更新磁盘文件，旧 daemon 继续用死链打 API（401），run 就会弹登录页。
+# 只匹配 cmdline 含 "app-server --listen" 或 "pid-update-loop"、且 environ 里
+# CODEX_HOME 精确等于目标 home 的进程，避免误杀 TUI 或其它 home 的进程。
+home_daemon_pids() {
+  local home="$1" p args env_line
+  [ -d /proc ] || return 0
+  for p in /proc/[0-9]*; do
+    [ -r "$p/cmdline" ] || continue
+    args="$(tr '\0' ' ' < "$p/cmdline" 2>/dev/null || true)"
+    case "$args" in
+      *"app-server --listen"*|*"pid-update-loop"*) ;;
+      *) continue ;;
+    esac
+    [ -r "$p/environ" ] || continue
+    env_line="$(tr '\0' '\n' < "$p/environ" 2>/dev/null | grep -Fx "CODEX_HOME=$home" | head -1 || true)"
+    [ -n "$env_line" ] && echo "${p#/proc/}"
+  done
+}
+
 cmd_help() {
-  sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 cmd_save() {
@@ -178,6 +200,15 @@ cmd_relogin() {
   fi
   echo "$name" > "$CURRENT_FILE"
   echo "已重新登录并保存为「${name}」  provider=$(cfg_provider "$d/config.toml")  account_id=$(aid_of "$d/auth.json")  mode=$(mode_of "$d/auth.json")"
+
+  # 磁盘上的新 token 对已在运行的旧 daemon 无效：它只在启动时读过一次 auth.json。
+  # 该 profile 的独立 home 里有旧 daemon 时提醒重启，否则 run 时可能仍弹登录页。
+  local hpids
+  hpids="$(home_daemon_pids "$HOMES_DIR/$name")"
+  if [ -n "$hpids" ]; then
+    echo "注意：「${name}」的独立 home 里有旧 app-server daemon 还在运行（PID: $(printf '%s' "$hpids" | tr '\n' ' ')），它缓存的还是旧登录态。"
+    echo "      run 之前请先执行：codex-switch daemon-restart ${name}"
+  fi
 }
 
 cmd_list() {
@@ -367,6 +398,18 @@ cmd_run() {
   # 让被旧版本污染的 home 自愈。只删软链，不动 codex 自己创建的目录。
   find "$home" -maxdepth 1 \( -name 'app-server-*' -o -name '.tmp' \) -type l -exec rm -f {} + 2>/dev/null || true
 
+  # 旧 daemon 只在启动时读过一次 auth.json；登录态文件比它更新 = 它内存里还是旧 token，
+  # 本次 run 会继续弹登录页 —— 提醒先重启 daemon。
+  local dp dstart
+  dp="$(home_daemon_pids "$home" | head -1)"
+  if [ -n "$dp" ] && [ -f "$home/auth.json" ]; then
+    dstart="$(stat -c %Y "/proc/$dp" 2>/dev/null || echo 0)"
+    if [ "$(stat -c %Y "$home/auth.json" 2>/dev/null || echo 0)" -gt "$dstart" ]; then
+      echo "警告：「${name}」的 home 里有旧 app-server daemon（PID $dp）还在用旧登录态，本次 run 可能弹登录页。"
+      echo "      建议先执行：codex-switch daemon-restart ${name}"
+    fi
+  fi
+
   echo "用「${name}」独立 CODEX_HOME 启动 codex → $home"
   CODEX_HOME="$home" exec codex "$@"
 }
@@ -394,6 +437,42 @@ cmd_sync() {
   echo "已把独立 home 的登录态回写进 profile「${name}」  account_id=$(aid_of "$src")  mode=$(mode_of "$src")"
 }
 
+cmd_daemon_restart() {
+  [ $# -eq 1 ] || die "用法：codex-switch daemon-restart <名字>"
+  local name="$1"
+  local home="$HOMES_DIR/$name"
+  [ -d "$home" ] || die "没有找到「${name}」的独立 home：$home（先 codex-switch run ${name} 运行过一次）"
+
+  local pids
+  pids="$(home_daemon_pids "$home")"
+  if [ -z "$pids" ]; then
+    echo "「${name}」的 home 没有检测到在运行的 app-server daemon。"
+    echo "下次 codex-switch run ${name} 会启动全新 daemon 并读取磁盘上的最新登录态，无需重启。"
+    return 0
+  fi
+
+  echo "检测到「${name}」的 home 还有旧 daemon 在运行（PID: $(printf '%s' "$pids" | tr '\n' ' ')）。"
+  echo "它缓存的是旧登录态；relogin/sync 之后继续用它，run 时可能仍弹登录页。正在停掉……"
+  # 先走官方 stop 清理它自己的状态，再兜底结束残留的 daemon / 孤儿 updater
+  if command -v codex >/dev/null 2>&1; then
+    CODEX_HOME="$home" codex app-server daemon stop >/dev/null 2>&1 || true
+  fi
+  sleep 1
+  local left
+  left="$(home_daemon_pids "$home")"
+  if [ -n "$left" ]; then
+    echo "官方 stop 后仍有残留进程（PID: $(printf '%s' "$left" | tr '\n' ' ')），直接结束……"
+    kill $left 2>/dev/null || true
+    sleep 1
+    left="$(home_daemon_pids "$home")"
+    if [ -n "$left" ]; then
+      echo "仍有进程未退出（PID: $(printf '%s' "$left" | tr '\n' ' ')），请手动结束：kill $(printf '%s' "$left" | tr '\n' ' ')" >&2
+      exit 1
+    fi
+  fi
+  echo "旧 daemon 已全部停掉。下次 codex-switch run ${name} 会带着最新登录态启动。"
+}
+
 case "${1:-help}" in
   save)     shift; cmd_save "$@" ;;
   use)      shift; cmd_use "$@" ;;
@@ -403,6 +482,7 @@ case "${1:-help}" in
   resume)   shift; cmd_resume "$@" ;;
   run)      shift; cmd_run "$@" ;;
   sync)     shift; cmd_sync "$@" ;;
+  daemon-restart) shift; cmd_daemon_restart "$@" ;;
   status)   cmd_status ;;
   delete)   shift; cmd_delete "$@" ;;
   help|-h|--help) cmd_help ;;

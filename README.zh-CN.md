@@ -262,6 +262,7 @@ codex-switch relogin --device-auth work
 | `relogin --device-auth <名字>` | 通过设备码重新登录；参数在名字前。 |
 | `run <名字> [codex 参数...]` | 用独立 CODEX_HOME 启动 Codex（auth/config 各自独立、会话软链共享），多账号并发不串号；沿用上次运行轮换后的新 token。 |
 | `sync <名字>` | 把 run 创建的独立 home 里的最新登录态回写进 profile，免重复登录。 |
+| `daemon-restart <名字>` | 停掉该 profile 独立 home 里缓存旧登录态的 app-server daemon，让下次 run 用最新登录态启动。 |
 | `list` | 列出 profile 和记录的活跃项。 |
 | `status` | 查看本地文件路径和账号/provider 元信息。 |
 | `sessions` | 从预期的 SQLite 表结构读取本地会话。 |
@@ -288,6 +289,8 @@ codex-switch relogin --device-auth work
 **提示缺少 `config.toml`？** 先完成 Codex 配置，确认 `CODEX_HOME` 指向你实际使用的目录；如果登录凭据只保存在系统钥匙串里，也不满足本工具的文件模式要求。
 
 **登录态失效？** 使用 `codex-switch relogin <名字>` 重新登录。切换用 `use`，不需要额外执行 `codex logout`。
+
+**relogin 后 run 仍弹登录页？** 独立 home 里的旧 app-server daemon 只在启动时读一次登录态，磁盘上的新 token 对它无效；先 `codex-switch daemon-restart <名字>` 再 run。
 
 **中转站/API provider？** 先按服务方要求配置 Codex 并验证可用，再保存 profile。环境变量形式的 key 需要你自行设置，工具不会替你切换。
 

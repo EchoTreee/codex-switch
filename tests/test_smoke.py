@@ -340,5 +340,90 @@ class CliSmokeTests(unittest.TestCase):
         self.assertEqual(help_result.returncode, 0)
 
 
+    def _spawn_fake_daemon(self, homes_dir, name, label="pid-update-loop"):
+        """Spawn a live process whose /proc cmdline matches the daemon patterns."""
+        sleep_bin = shutil.which("sleep")
+        self.assertIsNotNone(sleep_bin)
+        link = self.base / label
+        if not link.exists():
+            link.symlink_to(sleep_bin)
+        home = homes_dir / name
+        home.mkdir(parents=True, exist_ok=True)
+        proc = subprocess.Popen(
+            [str(link), "60"],
+            env={**self.env, "CODEX_HOME": home.as_posix()},
+            cwd=self.base,
+        )
+        self.addCleanup(self._kill_proc, proc)
+        return proc, home
+
+    @staticmethod
+    def _kill_proc(proc):
+        if proc.poll() is None:
+            proc.kill()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            pass
+
+    @unittest.skipUnless(os.path.isdir("/proc/self"), "requires /proc to inspect daemon processes")
+    def test_daemon_restart_noop_without_daemon(self):
+        homes = self.base / "homes" / "work"
+        homes.mkdir(parents=True)
+        (homes / "auth.json").write_text("{}", encoding="utf-8")
+        out = self.run_cli("daemon-restart", "work")
+        self.assertIn("无需重启", out)
+
+    @unittest.skipUnless(os.path.isdir("/proc/self"), "requires /proc to inspect daemon processes")
+    def test_daemon_restart_stops_only_its_own_home_daemons(self):
+        self.seed()
+        self.run_cli("save", "work")
+        homes = self.base / "homes"
+        work_proc, _ = self._spawn_fake_daemon(homes, "work")
+        other_proc, _ = self._spawn_fake_daemon(homes, "other", label="pid-update-loop-other")
+        out = self.run_cli("daemon-restart", "work")
+        self.assertIn("已全部停掉", out)
+        work_proc.wait(timeout=10)  # 目标 home 的进程被停掉
+        self.assertIsNone(other_proc.poll())  # 其它 home 的进程不受影响
+
+    @unittest.skipUnless(os.path.isdir("/proc/self"), "requires /proc to inspect daemon processes")
+    def test_relogin_warns_about_running_home_daemon(self):
+        # 回归：relogin 只更新磁盘文件；独立 home 里的旧 daemon 缓存旧 token 链，
+        # 不提醒的话用户 relogin 成功后 run 仍会弹登录页。
+        self.seed()
+        self.run_cli("save", "work")
+        proc, _ = self._spawn_fake_daemon(self.base / "homes", "work")
+        out = self.run_cli("relogin", "--device-auth", "work")
+        self.assertIn("daemon-restart work", out)
+        self.assertIsNone(proc.poll())  # relogin 只提醒，不动正在跑的进程
+
+    @unittest.skipUnless(os.path.isdir("/proc/self"), "requires /proc to inspect daemon processes")
+    def test_run_warns_when_daemon_predates_fresh_auth(self):
+        self.seed()
+        self.run_cli("save", "work")
+        self._spawn_fake_daemon(self.base / "homes", "work")
+        time.sleep(1.2)  # run 复制进去的 auth.json 比 daemon 启动时间新 → 旧 daemon 读不到
+        out = self.run_cli("run", "work")
+        self.assertIn("daemon-restart work", out)
+
+    @unittest.skipUnless(os.path.isdir("/proc/self"), "requires /proc to inspect daemon processes")
+    def test_run_stays_silent_when_daemon_started_after_auth(self):
+        # 反例：daemon 在 auth.json 之后启动，读到的就是最新登录态，不应警告
+        self.seed()
+        self.run_cli("save", "work")
+        homes = self.base / "homes" / "work"
+        homes.mkdir(parents=True)
+        now = time.time()
+        kept = '{"auth_mode": "chatgpt", "tokens": {"account_id": "fixture-kept"}}'
+        (homes / "auth.json").write_text(kept, encoding="utf-8")
+        os.utime(homes / "auth.json", (now, now))
+        os.utime(self.store / "profiles/work/auth.json", (now - 100, now - 100))
+        time.sleep(1.2)
+        self._spawn_fake_daemon(self.base / "homes", "work")
+        out = self.run_cli("run", "work")
+        self.assertNotIn("daemon-restart", out)
+        self.assertEqual((homes / "auth.json").read_text(encoding="utf-8"), kept)
+
+
 if __name__ == "__main__":
     unittest.main()
