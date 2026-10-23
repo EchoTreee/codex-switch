@@ -19,6 +19,7 @@
 ### Corrected
 
 - `status` file time now uses a portable `stat` (GNU `-c` / BSD `-f`), so macOS shows a real timestamp instead of `?`.
+- `run` no longer symlinks `app-server-daemon` into the isolated per-account home and clears a stale symlink left by a failed run, so the Codex daemon can create its own state directory instead of failing with `socket directory path exists and is not a directory`.
 - Smoke tests no longer require Python 3.10 (`Path.write_text(newline=...)` replaced with `open(newline="\n")`), so they run on macOS's system Python 3.9.
 - `resume` and `sessions` now flatten newlines/tabs in session titles before printing, so a single session whose title spans multiple lines is no longer miscounted as multiple matches.
 - Braced variables next to Chinese punctuation in CLI messages so macOS Bash does not consume part of a UTF-8 character as a variable name and abort. The existing Linux/macOS smoke suite covers these command paths.
