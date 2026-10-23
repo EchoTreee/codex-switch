@@ -42,6 +42,18 @@ Use the authentication method supported by that provider and your Codex version.
 
 If your provider reads its key from an environment variable, set that variable separately in the terminal where you launch Codex. Environment variables and operating-system keychain entries are not saved with profiles. Do not paste keys into issues, screenshots, or example commands.
 
+## macOS credential storage
+
+On macOS, Codex can keep the login in the system Keychain instead of `auth.json`, controlled by `cli_auth_credentials_store` in `config.toml` (`file`, `keyring`, or `auto`). The Keychain is global to the OS user and is not scoped by `CODEX_HOME`, so when the login lives there, switching profiles changes files but not the account.
+
+`save`, `use`, `relogin`, and `status` warn when they detect this (a `keyring` store, or `auto` with no account ID in `auth.json`). To fix it, set the credential store to file and sign in again:
+
+```toml
+cli_auth_credentials_store = "file"
+```
+
+then run `codex login`. Confirm `auth.json` contains an `account_id`; `codex-switch status` prints the detected store.
+
 ## Session search and resume
 
 ```bash
@@ -125,7 +137,7 @@ If a switch selected the wrong existing profile, `use <correct-name>` selects an
 | Missing session database / SQL error | Check that this home has sessions and that its schema matches the version the script expects. |
 | Several session matches | Use a more specific title keyword. |
 | Provider/model error on resume | Verify that the active provider supports the selected model and conversation. |
-| macOS shows `?` for file time | `status` uses GNU `stat -c` with a fallback; BSD `stat` may not show the timestamp. |
+| macOS warns about Keychain | Credentials are in the system Keychain, not `auth.json`; set `cli_auth_credentials_store = "file"` and re-run `codex login`. |
 
 For a bug report, include OS, Bash/Python/Codex versions, repository commit, the command, and redacted output. Never attach authentication files or session databases.
 

@@ -56,7 +56,9 @@ class CliSmokeTests(unittest.TestCase):
 
     def wrapper(self, name, body):
         path = self.bin / name
-        path.write_text("#!/usr/bin/env bash\n" + body, encoding="utf-8", newline="\n")
+        # 用 open(newline="\n") 强制 LF，兼容 Python 3.9（write_text 的 newline 参数需 3.10+）
+        with path.open("w", encoding="utf-8", newline="\n") as f:
+            f.write("#!/usr/bin/env bash\n" + body)
         path.chmod(0o755)
 
     def run_cli(self, *args, success=True):
@@ -75,7 +77,8 @@ class CliSmokeTests(unittest.TestCase):
         auth = json.dumps({"auth_mode": "chatgpt", "tokens": {"account_id": account}})
         config = f'model_provider = "{provider}"\nmodel = "{model}"\n'
         (self.home / "auth.json").write_text(auth, encoding="utf-8")
-        (self.home / "config.toml").write_text(config, encoding="utf-8", newline="\n")
+        with (self.home / "config.toml").open("w", encoding="utf-8", newline="\n") as f:
+            f.write(config)
         return auth.encode(), config.encode()
 
     def seed_sessions(self):
@@ -270,6 +273,44 @@ class CliSmokeTests(unittest.TestCase):
             capture_output=True, timeout=30,
         )
         self.assertEqual(help_result.returncode, 0)
+
+    def test_status_shows_file_time_not_placeholder(self):
+        self.seed()
+        out = self.run_cli("status")
+        self.assertIn("凭证存储：", out)
+        self.assertIn("文件时间：", out)
+        self.assertNotIn("文件时间：?", out)
+
+    def test_macos_keyring_store_warns(self):
+        self.wrapper("uname", 'echo Darwin\n')
+        (self.home / "auth.json").write_text(
+            json.dumps({"auth_mode": "chatgpt", "tokens": {}}), encoding="utf-8"
+        )
+        (self.home / "config.toml").write_text(
+            'model_provider = "openai"\ncli_auth_credentials_store = "keyring"\n',
+            encoding="utf-8",
+        )
+        out = self.run_cli("save", "work")
+        self.assertIn("Keychain", out)
+
+    def test_macos_auto_store_without_token_warns(self):
+        self.wrapper("uname", 'echo Darwin\n')
+        (self.home / "auth.json").write_text(
+            json.dumps({"auth_mode": "chatgpt", "tokens": {}}), encoding="utf-8"
+        )
+        (self.home / "config.toml").write_text(
+            'model_provider = "openai"\n', encoding="utf-8"
+        )
+        out = self.run_cli("save", "work")
+        self.assertIn("Keychain", out)
+
+    def test_macos_file_store_does_not_warn(self):
+        self.wrapper("uname", 'echo Darwin\n')
+        self.seed()
+        with open(self.home / "config.toml", "a", encoding="utf-8") as f:
+            f.write('cli_auth_credentials_store = "file"\n')
+        out = self.run_cli("save", "work")
+        self.assertNotIn("Keychain", out)
 
 
 if __name__ == "__main__":
