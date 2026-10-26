@@ -84,6 +84,44 @@ cfg_model() {
 
 die() { echo "错误：$*" >&2; exit 1; }
 
+# 跨平台文件修改时间：GNU stat 用 -c，BSD/macOS stat 用 -f
+file_mtime() {
+  local f="$1"
+  if stat -c '%y' "$f" >/dev/null 2>&1; then
+    stat -c '%y' "$f"
+  else
+    stat -f '%Sm' "$f"
+  fi
+}
+
+is_darwin() { [ "$(uname -s)" = "Darwin" ]; }
+
+# 从 config.toml 提取 cli_auth_credentials_store（缺省 auto；兼容带/不带引号的值）
+cfg_cred_store() {
+  local f="$1" v=""
+  [ -f "$f" ] || { echo "auto"; return; }
+  v="$(grep -E '^cli_auth_credentials_store[[:space:]]*=' "$f" 2>/dev/null | head -1)"
+  v="$(printf '%s' "$v" | sed -E 's/^[^=]*=[[:space:]]*//; s/[[:space:]]*#.*$//; s/^"//; s/"$//')"
+  echo "${v:-auto}"
+}
+
+# macOS 上若登录态在 Keychain，切 auth.json 无效，给出警示与修复指引
+warn_keychain() {
+  is_darwin || return 0
+  local store; store="$(cfg_cred_store "$CONFIG_FILE")"
+  case "$store" in
+    file) return 0 ;;
+    keyring) ;;
+    auto|"")
+      [ "$(aid_of "$AUTH_FILE")" = "?" ] || return 0
+      ;;
+    *) return 0 ;;
+  esac
+  echo "提示（macOS）：凭证存储为「${store}」，登录态可能在系统 Keychain 里。"
+  echo "  Keychain 是全局的，切换 auth.json 不会切换账号。请确认 auth.json 里有 account_id；"
+  echo "  或在 config.toml 加一行 cli_auth_credentials_store = \"file\" 后重新 codex login。"
+}
+
 cmd_help() {
   sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
 }
@@ -94,6 +132,7 @@ cmd_save() {
   local d="$PROFILES_DIR/$name"
   [ -f "$AUTH_FILE" ]   || die "没有找到 ${AUTH_FILE}，请先 codex login 登录"
   [ -f "$CONFIG_FILE" ] || die "没有找到 $CONFIG_FILE"
+  warn_keychain
   mkdir -p "$d"
   cp "$AUTH_FILE"   "$d/auth.json"
   cp "$CONFIG_FILE" "$d/config.toml"
@@ -106,6 +145,7 @@ cmd_use() {
   local name="$1"
   local d="$PROFILES_DIR/$name"
   [ -f "$d/auth.json" ] || die "profile「${name}」不存在（可用 codex-switch list 查看）"
+  warn_keychain
 
   # 切走前：把当前登录态 + 配置刷新回「当前」profile（CURRENT_FILE 记录的那个）
   local curprof=""
@@ -150,6 +190,7 @@ cmd_relogin() {
   local name="$1"
   local d="$PROFILES_DIR/$name"
   command -v codex >/dev/null 2>&1 || die "找不到 codex 命令"
+  warn_keychain
   if [ -n "$device_auth" ]; then
     echo "即将用设备码登录，请选择「${name}」对应的账号。"
     codex login --device-auth || die "codex login 失败"
@@ -203,15 +244,17 @@ cmd_status() {
   echo "auth.json   位置：$AUTH_FILE"
   echo "config.toml 位置：$CONFIG_FILE"
   echo "  当前 provider：$(cfg_provider "$CONFIG_FILE")"
+  echo "  凭证存储：$(cfg_cred_store "$CONFIG_FILE")"
   if [ -f "$AUTH_FILE" ]; then
     echo "  当前账号：account_id=$(aid_of "$AUTH_FILE")  mode=$(mode_of "$AUTH_FILE")"
-    echo "  文件时间：$(stat -c '%y' "$AUTH_FILE" 2>/dev/null || echo '?')"
+    echo "  文件时间：$(file_mtime "$AUTH_FILE")"
   else
     echo "  未登录（没有 auth.json）"
   fi
   if [ -f "$STORE_DIR/previous.auth.json" ]; then
     echo "上次切换前的备份：$STORE_DIR/previous.*（account_id=$(aid_of "$STORE_DIR/previous.auth.json")）"
   fi
+  warn_keychain
 }
 
 cmd_delete() {
@@ -338,7 +381,8 @@ cmd_run() {
     base="$(basename "$item")"
     case "$base" in
       auth.json|config.toml) continue ;;
-      app-server-control|.tmp|tmp|thread-writer-locks|shell_snapshots|.sandbox_migration) continue ;;
+      app-server-control|app-server-daemon) [ -L "$home/$base" ] && rm -f "$home/$base"; continue ;;
+      .tmp|tmp|thread-writer-locks|shell_snapshots|.sandbox_migration) continue ;;
       backup-*|config.toml.zipwuu.bak) continue ;;
       *-wal|*-shm) continue ;;
     esac

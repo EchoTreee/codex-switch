@@ -12,5 +12,9 @@ chmod +x "$DEST/codex-switch"
 echo "Installed codex-switch -> $DEST/codex-switch"
 if ! command -v codex-switch >/dev/null 2>&1; then
   echo "NOTE: $DEST is not on your PATH. Add it, e.g.:"
-  echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+  if [ "$(uname -s)" = "Darwin" ] || [ "${SHELL##*/}" = "zsh" ]; then
+    echo "  echo 'export PATH=\"\$HOME/.local/bin:\$PATH\"' >> ~/.zshrc"
+  else
+    echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+  fi
 fi

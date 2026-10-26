@@ -185,6 +185,8 @@ codex resume "$SESSION_ID" -c 'model_provider="openai"' -c 'model="gpt-6-astra"'
 
 主要面向 Linux。Windows 请在 WSL 等 Linux 环境中使用，下方命令需在 Bash 中运行。仓库包含面向 Linux/macOS 的基础测试工作流，但模拟测试通过不代表真实 Codex 登录与恢复流程已验证。当前终端输出为中文。
 
+在 macOS 上，Codex 可能把登录态存在系统 Keychain 里，而不是 `auth.json`（由 `config.toml` 的 `cli_auth_credentials_store` 控制）。此时切换 profile 只改文件、不改账号。`codex-switch` 检测到时会给出警告；请在 `config.toml` 里设置 `cli_auth_credentials_store = "file"` 并重新 `codex login` 修复。
+
 会话功能依赖 Codex 的 `state_5.sqlite` 和 `threads` 表结构；上游格式变化后可能需要适配。
 
 ## 安装
@@ -197,7 +199,7 @@ export PATH="$HOME/.local/bin:$PATH"
 codex-switch help
 ```
 
-默认安装到 `~/.local/bin`，不需要 `sudo`。如果该目录尚未加入 `PATH`，可将上面的 `export` 行加入你的 shell 启动文件。
+默认安装到 `~/.local/bin`，不需要 `sudo`。如果该目录尚未加入 `PATH`，可将上面的 `export` 行加入你的 shell 启动文件（macOS 默认 shell 是 zsh，请加到 `~/.zshrc`）。
 
 <details>
 <summary>自定义安装位置、更新与卸载</summary>

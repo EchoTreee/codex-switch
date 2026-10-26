@@ -56,7 +56,9 @@ class CliSmokeTests(unittest.TestCase):
 
     def wrapper(self, name, body):
         path = self.bin / name
-        path.write_text("#!/usr/bin/env bash\n" + body, encoding="utf-8", newline="\n")
+        # 用 open(newline="\n") 强制 LF，兼容 Python 3.9（write_text 的 newline 参数需 3.10+）
+        with path.open("w", encoding="utf-8", newline="\n") as f:
+            f.write("#!/usr/bin/env bash\n" + body)
         path.chmod(0o755)
 
     def run_cli(self, *args, success=True):
@@ -75,7 +77,8 @@ class CliSmokeTests(unittest.TestCase):
         auth = json.dumps({"auth_mode": "chatgpt", "tokens": {"account_id": account}})
         config = f'model_provider = "{provider}"\nmodel = "{model}"\n'
         (self.home / "auth.json").write_text(auth, encoding="utf-8")
-        (self.home / "config.toml").write_text(config, encoding="utf-8", newline="\n")
+        with (self.home / "config.toml").open("w", encoding="utf-8", newline="\n") as f:
+            f.write(config)
         return auth.encode(), config.encode()
 
     def seed_sessions(self):
@@ -236,22 +239,27 @@ class CliSmokeTests(unittest.TestCase):
         sessions = self.home / "sessions"
         sessions.mkdir()
         (sessions / "shared.txt").write_text("shared", encoding="utf-8")
-        # 放一个 app-server-control（含 socket），验证 run 不会软链它（避免 TUI 连全局 app-server 串号）
-        app_ctl = self.home / "app-server-control"
-        app_ctl.mkdir()
-        (app_ctl / "app-server-control.sock").write_text("", encoding="utf-8")
+        # app-server-control / app-server-daemon（含 socket）不应软链（避免 TUI 连全局 app-server 串号）
+        for name in ("app-server-control", "app-server-daemon"):
+            d = self.home / name
+            d.mkdir()
+            (d / f"{name}.sock").write_text("", encoding="utf-8")
+        # 预先造一个残留软链（模拟上一次失败 run 留下的），验证会被清理
+        homes = self.base / "homes" / "work"
+        homes.mkdir(parents=True)
+        (homes / "app-server-daemon").symlink_to(self.home / "app-server-daemon")
 
         self.run_cli("run", "work")
 
-        homes = self.base / "homes" / "work"
         # auth.json / config.toml 是真实文件（每账号独立，不软链）
         self.assertTrue((homes / "auth.json").is_file() and not (homes / "auth.json").is_symlink())
         self.assertTrue((homes / "config.toml").is_file() and not (homes / "config.toml").is_symlink())
         # sessions 是软链，指向共享 CODEX_HOME，历史互通
         self.assertTrue((homes / "sessions").is_symlink())
         self.assertEqual((homes / "sessions" / "shared.txt").read_text(encoding="utf-8"), "shared")
-        # app-server-control 不软链（避免串号）
+        # app-server-control / app-server-daemon 不软链（避免串号），残留软链也被清理
         self.assertFalse((homes / "app-server-control").exists())
+        self.assertFalse((homes / "app-server-daemon").exists())
         # codex 被调用
         self.assertEqual(json.loads(self.calls.read_text()), [])
 
@@ -270,6 +278,44 @@ class CliSmokeTests(unittest.TestCase):
             capture_output=True, timeout=30,
         )
         self.assertEqual(help_result.returncode, 0)
+
+    def test_status_shows_file_time_not_placeholder(self):
+        self.seed()
+        out = self.run_cli("status")
+        self.assertIn("凭证存储：", out)
+        self.assertIn("文件时间：", out)
+        self.assertNotIn("文件时间：?", out)
+
+    def test_macos_keyring_store_warns(self):
+        self.wrapper("uname", 'echo Darwin\n')
+        (self.home / "auth.json").write_text(
+            json.dumps({"auth_mode": "chatgpt", "tokens": {}}), encoding="utf-8"
+        )
+        (self.home / "config.toml").write_text(
+            'model_provider = "openai"\ncli_auth_credentials_store = "keyring"\n',
+            encoding="utf-8",
+        )
+        out = self.run_cli("save", "work")
+        self.assertIn("Keychain", out)
+
+    def test_macos_auto_store_without_token_warns(self):
+        self.wrapper("uname", 'echo Darwin\n')
+        (self.home / "auth.json").write_text(
+            json.dumps({"auth_mode": "chatgpt", "tokens": {}}), encoding="utf-8"
+        )
+        (self.home / "config.toml").write_text(
+            'model_provider = "openai"\n', encoding="utf-8"
+        )
+        out = self.run_cli("save", "work")
+        self.assertIn("Keychain", out)
+
+    def test_macos_file_store_does_not_warn(self):
+        self.wrapper("uname", 'echo Darwin\n')
+        self.seed()
+        with open(self.home / "config.toml", "a", encoding="utf-8") as f:
+            f.write('cli_auth_credentials_store = "file"\n')
+        out = self.run_cli("save", "work")
+        self.assertNotIn("Keychain", out)
 
 
 if __name__ == "__main__":

@@ -185,6 +185,8 @@ This workflow requires a shared home, a compatible session format, and a provide
 
 Linux is the primary target. On Windows, use a Linux environment such as WSL; these commands are Bash commands. The included workflow runs smoke tests on Linux and macOS, but mock tests do not establish live Codex compatibility. Terminal messages are currently in Chinese.
 
+On macOS, Codex can keep the login in the system Keychain instead of `auth.json` (see `cli_auth_credentials_store` in `config.toml`). When that happens, switching profiles changes files but not the account. `codex-switch` warns when it detects this; set `cli_auth_credentials_store = "file"` and run `codex login` again to fix it.
+
 `sessions` and `resume` depend on Codex's local `state_5.sqlite` database and `threads` schema. They may need updates when Codex changes its storage format. See [compatibility](docs/usage.md#compatibility).
 
 ## Install
@@ -197,7 +199,7 @@ export PATH="$HOME/.local/bin:$PATH"
 codex-switch help
 ```
 
-The installer copies the script to `~/.local/bin`. Keep the `PATH` line in your shell's startup file if that directory is not already on your path. It does not require `sudo`.
+The installer copies the script to `~/.local/bin`. Keep the `PATH` line in your shell's startup file if that directory is not already on your path (on macOS the default shell is zsh, so add it to `~/.zshrc`). It does not require `sudo`.
 
 <details>
 <summary>Custom directory, updates, and uninstall</summary>
