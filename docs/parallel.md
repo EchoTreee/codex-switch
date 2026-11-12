@@ -6,7 +6,8 @@
 
 | Layout | Useful for | Tradeoff |
 | --- | --- | --- |
-| Shared `CODEX_HOME`, accounts launched in sequence | Multiple terminals on one machine with one local conversation store. | Credential files and profile markers remain shared, with startup, refresh, and save-back races. |
+| **`run <name>`: one home per account** | **Everyday parallelism: separate authentication files, one shared conversation store.** | **Recommended. The home's `sessions/` is symlinked back to `~/.codex`, and `run` keeps the newer `auth.json` while writing it back to the profile.** |
+| Shared `CODEX_HOME`, accounts launched in sequence | No concurrency needed, or tools that must share `~/.codex`. | Credential files and profile markers remain shared, with startup, refresh, and save-back races — the rest of this page covers those. |
 | Separate `CODEX_HOME` and `CODEX_SWITCH_DIR` | Separate authentication files and profile stores for each group of processes. | Local conversation history is no longer automatically shared; see [separate homes](usage.md#parallel-use). |
 | One Git worktree and branch per agent | Keeping concurrent code edits in different working directories. | Does not isolate authentication, ports, databases, or other external resources. |
 
