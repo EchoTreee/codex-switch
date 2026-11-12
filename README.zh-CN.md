@@ -12,22 +12,22 @@
 
 [English](README.md) · **简体中文**
 
-[并行工作流](#并行工作流集中启动各自完成结束后恢复) · [官方多账号](#官方多账号使用) · [官方与中转站混用](#官方与中转站混合使用) · [安装](#安装) · [命令速查](#命令速查) · [参与贡献](CONTRIBUTING.md)
+[并行工作流](#并行工作流每个账号一个独立-home) · [官方多账号](#官方多账号使用) · [官方与中转站混用](#官方与中转站混合使用) · [安装](#安装) · [命令速查](#命令速查) · [参与贡献](CONTRIBUTING.md)
 
-个人账号、工作账号、自定义 provider，每次切换都要手动整理登录文件和配置？给每套环境起个名字，把本地登录文件和 `config.toml` 一起保存，需要时一起恢复。
+个人账号、工作账号、自定义 provider，每次切换都要手动整理登录文件和配置？给每套环境起个名字，把本地登录文件和 `config.toml` 一起保存，需要时一起恢复；多个账号还能各自用一个独立 home 同时运行。
 
-**换官方账号，或在官方与中转站之间换线路，都可以接着同一个本地对话继续工作。** 前提是使用同一 `CODEX_HOME`：历史本来就是本地同一份，无需额外同步。下面分别介绍[官方多账号](#官方多账号使用)和[官方与中转站混用](#官方与中转站混合使用)。
+**每个账号一个独立 `CODEX_HOME`，登录文件互不干扰，会话历史仍然互通。** `run` 创建的独立 home 会把会话记录软链回共享的 `~/.codex`，所以换账号、换线路都能接着同一个本地对话继续工作。下面分别介绍[官方多账号](#官方多账号使用)和[官方与中转站混用](#官方与中转站混合使用)。
 
 ```bash
-codex-switch save work       # 保存当前登录态和配置
-codex-switch use personal    # 切换到已经保存的个人配置
-codex-switch resume "parser" # 按标题关键词或会话 ID 继续本地会话
+codex-switch relogin --device-auth work  # 登录一个账号并存成 profile（不打扰其它会话）
+codex-switch run work                    # 用它的独立 home 启动 codex，可多账号同时跑
+codex-switch use personal                # 切换共享 home（IDE / 桌面端等共用的那份）
 ```
 
 ## 六个核心优势
 
-1. **一台机器，多账号并行。** 多个终端分别启动 Codex CLI，选择不同 ChatGPT 账号处理任务。作者已在实践中使用这一方式；共享 home 仍有认证竞态，请按[并行工作流](#并行工作流集中启动各自完成结束后恢复)操作。
-2. **账号间共享本地对话。** 同一 `CODEX_HOME` 下，跨账号、跨兼容 provider（官方 ↔ 中转站）继续同一条对话，无需复制或同步两套历史。
+1. **一台机器，多账号并行。** 每个账号一个独立 `CODEX_HOME`（`run`），各自持有登录文件，多个终端同时跑也不串号，不需要在终端之间来回切换。
+2. **账号间共享本地对话。** 独立 home 会把 `sessions/` 软链回共享的 `~/.codex`，跨账号、跨兼容 provider（官方 ↔ 中转站）继续同一条对话，无需复制或同步两套历史。
 3. **文件切换，不主动退出登录。** 恢复 `auth.json` + `config.toml`，减少重复登录操作。切换器不调用 `codex logout`，也不调用 token 吊销接口；但这不阻止凭据到期或被其他进程轮换。
 4. **官方账号与自定义 provider 统一管理。** 已配置可用的 API-key 中转站及其 `base_url` 可一起存成 profile。环境变量形式的 key 需另行管理。
 5. **配合 Git worktree 并行开发。** 每个 agent 使用独立分支和工作目录，避免直接覆盖彼此的代码文件；认证文件和外部服务仍需单独考虑。
@@ -39,27 +39,27 @@ codex-switch resume "parser" # 按标题关键词或会话 ID 继续本地会话
 | --- | --- | --- |
 | 切换的是什么？ | 登录身份，配置也可以不同。 | 登录方式、provider 线路，可能还有模型。 |
 | provider 是否变化？ | 通常都为 `openai`。 | 例如 `openai` ↔ `zipwuu`。 |
-| 历史是否共享？ | 同一 `CODEX_HOME` 下共享。 | 同样需要使用同一 `CODEX_HOME`。 |
-| 怎么继续会话？ | 切换 profile 后，用原生 `codex resume` 恢复 `openai` 会话；也可用本工具。 | 用 `codex-switch sessions` 查找，再用 `codex-switch resume` 带入当前线路和模型。 |
+| 历史是否共享？ | 共享：独立 home 把 `sessions/` 软链回 `~/.codex`。 | 同样共享。 |
+| 怎么继续会话？ | `run <账号> resume` 用该账号的独立 home 恢复 `openai` 会话。 | 用 `codex-switch sessions` 查找，再用 `run <名字> resume <关键词或ID>` 带入该 profile 的线路和模型。 |
 | 为什么方式不同？ | 只换账号，不会因此跨越 provider。 | 找到会话与决定用哪条线路恢复，是两个不同步骤。 |
 
 一个 Bash 脚本，搭配 Python 标准库。不需要构建，也不需要常驻服务或注册本项目的账号。
 
-> **使用边界：**常规切换和凭据恢复应在其他共享 home 的进程退出后进行。下面的共享目录并行方式来自作者实践，仍有已知竞态；需要分开认证文件时，使用[独立 home 和 profile 存储目录](docs/usage.md#parallel-use)。
+> **使用边界：**`run` 的独立 home 把认证文件分开，是并行运行的主要方式。共享 home（`use`）只有一个登录态，多个进程共用它仍有刷新竞态；共用它的工具（如 IDE 扩展、桌面端）请避免与别的终端抢同一个账号。
 
-## 并行工作流：集中启动，各自完成，结束后恢复
+## 并行工作流：每个账号一个独立 home
 
-**作者验证过的使用经验是：集中启动计划中的账号，各自完成任务，结束后再处理凭据恢复；共享 home 下频繁、无缝地来回切换仍不可靠。**
+**日常并行用 `run`：每个账号有自己的 `CODEX_HOME`，登录文件互不干扰，会话历史仍然共享。**
 
-1. **提前准备。** 在没有其他进程写入共享 home 时保存有效 profile，并为各 agent 准备独立分支与 worktree。
-2. **依次开好终端。** 在各自 worktree 中，先 `codex-switch use <账号>`，紧接着启动 `codex`，完成当前终端的启动后再开下一个。这能减少启动时用错账号的机会，但不能消除刷新竞态。
-3. **运行中各自完成任务。** 避免手动 `use`、`save`、`relogin` 或修改共享认证文件。即使你不操作，Codex 自身仍可能刷新并写回凭据。
-4. **查记录与续会话分开。** `codex-switch sessions` 只读索引，可以用来查找历史；`codex-switch resume` 会启动新 Codex 进程，仍然需要正确的登录身份，不能当成与 token 无关的操作。
-5. **所有共享 home 的进程退出后再恢复。** 不要假设 profile 中一定是最新有效 token。凭据陈旧或身份不确定时，用 `codex-switch relogin <账号>` 重新登录，再启动或续聊；不能只按运行时长判断是否失效。
+1. **准备账号。** 新账号直接 `codex-switch relogin --device-auth <名字>`：在隔离的临时 home 里登录，会创建或覆盖该 profile，不吊销其它会话正在用的 token。中间还要 `codex login` 的旧做法已经不需要了。
+2. **各开各的终端。** 每个终端 `codex-switch run <账号>`，可以在同一时间跑多个账号、互不串号。给每个 agent 准备独立 worktree 隔离代码文件。
+3. **运行期间可以照常重登别的账号。** `relogin` 只在临时 home 里操作，不会影响正在运行的槽位；但同一个槽位正在跑时不要对它自己 `relogin`。
+4. **token 失效后按顺序恢复。** `relogin --device-auth <账号>` → `daemon-restart <账号>` → `run <账号>`。少了 `daemon-restart` 那一步会继续弹登录页：daemon 只在启动时读一次 `auth.json`，内存里还是旧 token。
+5. **查记录与续会话分开。** `codex-switch sessions` 只读索引，可以用来查找历史；`codex-switch resume` 或 `run <账号> resume` 都会启动新的 Codex 进程，仍然需要正确的登录身份，不能当成与 token 无关的操作。
 
-仍需注意三个风险：新进程可能读到另一个账号；token 轮换和并发写入可能让快照陈旧或串号；`use` 又可能按过时的 `current` 标记，把错误快照回存到 profile。
+`run` 在启动时会比较独立 home 与 profile 里的 `auth.json`，取较新的那份并回写 profile，所以上一次运行轮换过的 token 不会丢。共享 home 下的顺序切换方式（`use` + `codex`）仍然可用，但只建议在没有并发需求时使用，或用于必须共用 `~/.codex` 的工具。
 
-完整的双终端 worktree 示例、三个风险的原因与收尾步骤，见[并行工作流与风险指南](docs/parallel.zh-CN.md)。本地历史还在与登录态可用，是两件不同的事；也应避免多个进程同时恢复并写入同一条对话。
+完整的双终端 worktree 示例、共享 home 的三个风险与收尾步骤，见[并行工作流与风险指南](docs/parallel.zh-CN.md)。本地历史还在与登录态可用，是两件不同的事；也应避免多个进程同时恢复并写入同一条对话。
 
 ## 推荐搭配：herdr
 
@@ -71,7 +71,7 @@ codex-switch resume "parser" # 按标题关键词或会话 ID 继续本地会话
 | **codex-switch** | 选择保存的账号与 provider 配置，接续本地对话。 |
 | **Git worktree** | 给每个 agent 独立的代码目录与分支。 |
 
-每个 worktree 开一个窗格，再在窗格内按上面的顺序依次启动账号，就能把这套工作流集中在一个界面里。herdr 是可选搭配；codex-switch 不依赖它，这种组合也不会隔离共享的认证文件。
+每个 worktree 开一个窗格，在窗格内 `codex-switch run <账号>` 启动，就能把这套工作流集中在一个界面里。herdr 是可选搭配；codex-switch 不依赖它。
 
 断开 herdr 客户端可以让后台服务和 agent 进程继续运行；服务重启后的会话恢复则会启动新进程，仍需选择正确身份。详细操作见[herdr 搭配说明](docs/parallel.zh-CN.md#用-herdr-集中管理终端)和 [herdr 快速入门](https://herdr.dev/docs/quick-start/)。
 
@@ -79,30 +79,38 @@ codex-switch resume "parser" # 按标题关键词或会话 ID 继续本地会话
 
 **适合两个或多个官方账号，provider 通常都为 `openai` 的场景。** 重点是切换登录身份，同时保留本地已有工作。
 
-### 先分别保存每个账号
+### 先分别登录每个账号
 
-完成[安装](#安装)后，从一套已能正常使用的官方 Codex 配置开始，确认 `auth.json` 和 `config.toml` 都存在。切换前先退出使用同一 home 的运行中会话。
+完成[安装](#安装)后，逐个登录要用的官方账号。`relogin` 在隔离的临时 home 里登录并直接存成 profile，不会吊销共享 home 或其它槽位的 token：
 
 ```bash
-# 当前已登录并配置好官方账号 A。
-codex-switch save official-work
+# 登录官方账号 A（名字不存在会自动创建 profile）
+codex-switch relogin --device-auth official-work
 
-# 登录官方账号 B，随后立即保存。
-codex login
-codex-switch save official-personal
+# 登录官方账号 B
+codex-switch relogin --device-auth official-personal
 ```
 
-登录时选对账号。外部登录后立即保存，避免下一次切换时把新账号文件写回原先记录为活跃状态的 profile。
+浏览器页面里选对账号。已有 profile 也可以先 `codex-switch use <名字>` 切到共享 home 再 `save` 覆盖，但 `relogin` 更省事，也不会影响正在运行的槽位。
 
-### 日常切换与续聊
+### 日常运行与续聊
+
+```bash
+# 每个账号一个独立 home，可以同时开多个终端
+codex-switch run official-work
+
+# 另一个终端同时跑另一个账号，互不串号
+codex-switch run official-personal
+
+# 指定账号续某条会话（run 后面的参数原样传给 codex）
+codex-switch run official-work resume "parser"
+```
+
+如果某个工具必须共用 `~/.codex`（例如 IDE 扩展或桌面端），再用 `codex-switch use <名字>` 切换共享 home：
 
 ```bash
 codex-switch use official-work
-codex resume                  # 选择已有的官方线路会话
-
-# 退出正在运行的会话后，再切换账号。
-codex-switch use official-personal
-codex resume                  # 选择同一条会话继续
+codex resume
 ```
 
 要精确恢复，可以直接把会话 ID 传给 `codex-switch resume "your-session-id"`，或填入原生 `codex resume`。也可以用 `codex-switch sessions` 查找，再用 `codex-switch resume "parser"` 按标题恢复，并显式采用当前 profile 的模型设置。
@@ -113,7 +121,7 @@ codex resume                  # 选择同一条会话继续
 
 如果这条会话之前已经通过中转站恢复过，保存的 provider 可能已不同，应使用下面的[混合使用方式](#官方与中转站混合使用)。不同官方账号的模型权限也可能不同，需要时选择可用模型；原生选择器的工作目录过滤仍可能影响可见性。
 
-上面的示例是顺序切换。共享 home 的多终端实践见[并行工作流](#并行工作流集中启动各自完成结束后恢复)；要分开认证文件，则使用[独立 home 与 profile 存储目录](docs/usage.md#parallel-use)，但它们不会自动共享会话历史。
+上面的 `use` 示例只切换共享 home 的那一份登录态。需要同时跑多个账号时用 [`run` 的独立 home](#并行工作流每个账号一个独立-home)：认证文件各自分开，会话历史仍然共享。
 
 ## 官方与中转站混合使用
 
@@ -149,13 +157,9 @@ codex-switch save relay
 先在同一 Codex home 下保存并验证两套 profile。下面的 `relay` 和 `official` 是已保存的 profile 名字；关键词需唯一匹配一个 CLI / VS Code 会话。
 
 ```bash
-codex-switch sessions           # 列出 CLI / exec / VS Code 会话，不按 provider 过滤
-codex-switch use relay          # 切换到保存好的中转站配置
-codex-switch resume "parser"    # 自动用当前 provider/model 继续
-
-# 退出上面的 Codex 会话，再切回官方。
-codex-switch use official
-codex-switch resume "parser"    # 接着同一个本地对话继续
+codex-switch sessions                    # 列出 CLI / exec / VS Code 会话，不按 provider 过滤
+codex-switch run relay resume "parser"   # 用中转站 profile 的独立 home 续这条会话
+codex-switch run official resume "parser"  # 换成官方 profile 接着同一个本地对话继续
 ```
 
 等价的手动命令如下。替换会话 ID，并使用对应线路实际支持的模型；`zipwuu` 是已配置 provider 的示例标识，不是内置配置或推荐服务。
@@ -222,22 +226,21 @@ rm "$HOME/.local/bin/codex-switch"
 
 ## 快速开始
 
-先准备好已有的 Codex 登录和配置，关闭使用同一 Codex home 的运行中会话。
-
 ```bash
-# 保存你正在使用的账号与配置
-codex-switch save work
+# 1. 登录第一个账号（自动创建 profile；按提示在浏览器里选对账号）
+codex-switch relogin --device-auth work
 
-# 登录第二个账号，随后立即保存
-codex login
-codex-switch save personal
+# 2. 用它的独立 home 启动 Codex
+codex-switch run work
 
-# 选择已保存的环境，再启动 Codex
-codex-switch use work
-codex
+# 3. 登录第二个账号，另开一个终端同时跑，互不串号
+codex-switch relogin --device-auth personal
+codex-switch run personal
 ```
 
-在外部执行 `codex login` 或手动修改 provider 后，先 `save <名字>` 再 `use`。原因是切换时会将当前文件写回记录为活跃状态的 profile，直接切走可能覆盖原来的账号快照。登录时选对账号，并为不同环境使用不同名字。
+`run` 会在 `~/.codex-homes/<名字>` 建立该账号自己的 `auth.json` 和 `config.toml`，其余目录软链回共享的 `~/.codex`，所以会话历史仍然互通。需要一个工具共用 `~/.codex`（IDE 扩展、桌面端）时，用 `codex-switch use <名字>` 切换共享 home。
+
+想先保存现有登录态也可以：在共享 home 里 `codex-switch save work`。之后外部执行过 `codex login` 或改过 provider，要先 `save <名字>` 再切走，避免覆盖原来的账号快照。
 
 ```bash
 codex-switch list             # 查看已保存的 profile，* 表示记录的活跃项
@@ -246,10 +249,12 @@ codex-switch sessions         # 列出本地 CLI / exec / VS Code 会话
 codex-switch resume "parser"  # 标题关键词或会话 ID，需唯一匹配一个 CLI / VS Code 会话
 ```
 
-设备码重新登录的正确顺序是：
+token 失效（登录后报 401 / 提示重新登录）后的恢复顺序：
 
 ```bash
-codex-switch relogin --device-auth work
+codex-switch relogin --device-auth work   # 重新登录，隔离的临时 home，不影响其它槽位
+codex-switch daemon-restart work          # 停掉缓存旧 token 的 app-server daemon
+codex-switch run work                     # 用新登录态启动
 ```
 
 ## 命令速查
@@ -262,8 +267,8 @@ codex-switch relogin --device-auth work
 | `use <名字>` | 刷新原活跃 profile、备份当前文件，再恢复目标 profile。 |
 | `relogin <名字>` | 在隔离的临时 home 里调用 Codex 登录并保存；共享 home 的登录态不受影响。 |
 | `relogin --device-auth <名字>` | 通过设备码重新登录；参数在名字前。 |
-| `run <名字> [codex 参数...]` | 用独立 CODEX_HOME 启动 Codex（auth/config 各自独立、会话软链共享），多账号并发不串号；沿用上次运行轮换后的新 token。 |
-| `sync <名字>` | 把 run 创建的独立 home 里的最新登录态回写进 profile，免重复登录。 |
+| `run <名字> [codex 参数...]` | **日常主力**：用独立 CODEX_HOME 启动 Codex（auth/config 各自独立、会话软链共享），多账号并发不串号；启动时自动沿用并回写上次运行轮换后的新 token。 |
+| `sync <名字>` | 手动把独立 home 的最新登录态回写进 profile（`run` 启动时也会自动回写较新的那份）。 |
 | `daemon-restart <名字>` | 停掉该 profile 独立 home 里缓存旧登录态的 app-server daemon，让下次 run 用最新登录态启动。 |
 | `list` | 列出 profile 和记录的活跃项。 |
 | `status` | 查看本地文件路径和账号/provider 元信息。 |
@@ -278,8 +283,9 @@ codex-switch relogin --device-auth work
 
 | 位置 | 内容 |
 | --- | --- |
-| `~/.codex/` | Codex 当前登录态、配置及本地会话。 |
-| `~/.config/codex-switch/profiles/<名字>/` | 该 profile 的 `auth.json` 和 `config.toml`。 |
+| `~/.codex/` | 共享 home：Codex 当前登录态、配置及本地会话。 |
+| `~/.codex-homes/<名字>/` | `run` 创建的独立 home：该账号自己的 `auth.json` / `config.toml`，其余软链回共享 home。 |
+| `~/.config/codex-switch/profiles/<名字>/` | 该 profile 保存的 `auth.json` 和 `config.toml`。 |
 | `~/.config/codex-switch/previous.*` | 最近一次切换前的快照，后续切换会覆盖。 |
 
 可用 `CODEX_HOME` 指定 Codex 数据位置，用 `CODEX_SWITCH_DIR` 指定 profile 存储位置，用 `CODEX_SWITCH_HOMES_DIR` 指定 `run` 创建的隔离 home 根目录（默认 `~/.codex-homes`）。切换只复制登录和配置文件，本地 `sessions/` 与数据库保持原位；独立 Codex home 之间不会自动同步会话。
@@ -290,7 +296,7 @@ codex-switch relogin --device-auth work
 
 **提示缺少 `config.toml`？** 先完成 Codex 配置，确认 `CODEX_HOME` 指向你实际使用的目录；如果登录凭据只保存在系统钥匙串里，也不满足本工具的文件模式要求。
 
-**登录态失效？** 使用 `codex-switch relogin <名字>` 重新登录。切换用 `use`，不需要额外执行 `codex logout`。
+**登录态失效（401 / token_revoked）？** 按 `relogin --device-auth <名字>` → `daemon-restart <名字>` → `run <名字>` 三步恢复。切换账号用 `use` 或 `run`，不要执行 `codex logout`：它会在服务器端吊销 refresh token，让已保存的 profile 一起失效。
 
 **relogin 后 run 仍弹登录页？** 独立 home 里的旧 app-server daemon 只在启动时读一次登录态，磁盘上的新 token 对它无效；先 `codex-switch daemon-restart <名字>` 再 run。
 

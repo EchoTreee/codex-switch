@@ -92,9 +92,11 @@ To verify provider writeback on your Codex version, use a disposable conversatio
 
 ## Parallel use
 
-There are two distinct options. The author reports using a shared home by launching each selected account in sequence, letting the tasks finish, and recovering credentials afterward; this retains shared local history but has authentication races. See the [parallel guide](parallel.md) / [中文指南](parallel.zh-CN.md) for the workflow and risks. Routine switching, re-login, and recovery should happen after stopping other processes using that home.
+The recommended way to run several accounts at once is `run <name>`. Each account gets its own `CODEX_HOME` under `~/.codex-homes/<name>` holding a real `auth.json` and `config.toml`, while `sessions/` and the other shared directories are symlinked back to `~/.codex` — so authentication files never collide and conversation history stays shared. On startup `run` keeps the newer of the home/profile `auth.json` pair and writes it back to the profile, so tokens rotated during the previous run survive.
 
-The alternative below uses separate homes and stores to separate authentication files. It does not automatically share conversation history. Neither option makes worktrees an authentication boundary.
+The older pattern — one shared home, accounts launched in sequence with `use <name>` — still works when you do not need concurrency or when a tool must use `~/.codex` itself (an IDE extension or desktop app). It retains shared local history but has authentication races; see the [parallel guide](parallel.md) / [中文指南](parallel.zh-CN.md). Routine switching and re-login against that home should happen after stopping other processes using it.
+
+The third option below uses separate homes **and** separate profile stores. It does not automatically share conversation history. None of these options makes worktrees an authentication boundary.
 
 For separate concurrent setups, launch each terminal with its own home **and its own profile store**. For example, in terminal A:
 
@@ -125,6 +127,14 @@ codex-switch relogin --device-auth work
 The device flag must precede the name. Pick the intended account in the login flow. Login runs inside a temporary scratch home so that Codex's logout step cannot revoke the shared home's session, or a session a concurrent `run` slot is actively using; the shared home's files are left untouched. The profile keeps its saved configuration, or receives the current one when available.
 
 If `run` still shows the login page right after a successful `relogin`, the isolated home's app-server daemon is still caching the old authentication: a daemon reads `auth.json` only once at startup and keeps the token chain in memory, so new tokens on disk do not take effect until it is stopped. Run `codex-switch daemon-restart <name>`; the next `run` starts a fresh daemon with the new tokens.
+
+The full recovery order after a revoked token (`401` / `token_revoked` / login page again) is:
+
+```bash
+codex-switch relogin --device-auth <name>   # new login in a scratch home
+codex-switch daemon-restart <name>          # drop the daemon holding the dead token
+codex-switch run <name>                     # start with the new authentication
+```
 
 If a switch selected the wrong existing profile, `use <correct-name>` selects another saved profile. For manual recovery, close running sessions and inspect the `previous.*` snapshot locally before copying it back. It may have already been replaced by another switch; there is no built-in rollback command.
 
